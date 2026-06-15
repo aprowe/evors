@@ -23,12 +23,18 @@ mod tests {
     struct UnitGenetics;
     impl Genetic for UnitGenetics {
         type Genome = f64;
-        fn random(&self, rng: &mut impl Rng) -> f64 { rng.random::<f64>() }
-        fn cross(&self, a: &f64, b: &f64, _rng: &mut impl Rng) -> f64 { (a + b) / 2.0 }
+        fn random(&self, rng: &mut impl Rng) -> f64 {
+            rng.random::<f64>()
+        }
+        fn cross(&self, a: &f64, b: &f64, _rng: &mut impl Rng) -> f64 {
+            (a + b) / 2.0
+        }
         fn mutate(&self, g: &f64, rng: &mut impl Rng) -> f64 {
             (g + rng.random_range(-0.1..0.1)).clamp(0.0, 1.0)
         }
-        fn gene_dist(&self, a: &f64, b: &f64) -> f64 { (a - b).abs() }
+        fn gene_dist(&self, a: &f64, b: &f64) -> f64 {
+            (a - b).abs()
+        }
     }
 
     #[test]

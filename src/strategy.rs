@@ -25,7 +25,9 @@ pub trait Behavior {
 }
 
 impl Fitness for f64 {
-    fn fitness(&self) -> f64 { *self }
+    fn fitness(&self) -> f64 {
+        *self
+    }
 }
 
 #[cfg(test)]

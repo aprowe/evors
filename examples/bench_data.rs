@@ -8,7 +8,7 @@ use evors::strategies::{
 };
 use evors::strategy::EvolutionStrategy;
 use rand::Rng;
-use std::fs::{create_dir_all, File};
+use std::fs::{File, create_dir_all};
 use std::io::{BufWriter, Write};
 
 // ---------------- XOR problem ----------------
@@ -23,7 +23,12 @@ impl Genetic for NetGenetics {
         Net((0..9).map(|_| rng.random_range(-5.0..5.0)).collect())
     }
     fn cross(&self, a: &Net, b: &Net, rng: &mut impl Rng) -> Net {
-        Net(a.0.iter().zip(&b.0).map(|(x, y)| if rng.random_bool(0.5) { *x } else { *y }).collect())
+        Net(a
+            .0
+            .iter()
+            .zip(&b.0)
+            .map(|(x, y)| if rng.random_bool(0.5) { *x } else { *y })
+            .collect())
     }
     fn mutate(&self, g: &Net, rng: &mut impl Rng) -> Net {
         let mut w = g.0.clone();
@@ -36,38 +41,65 @@ impl Genetic for NetGenetics {
         Net(w)
     }
     fn gene_dist(&self, a: &Net, b: &Net) -> f64 {
-        a.0.iter().zip(&b.0).map(|(x, y)| (x - y).powi(2)).sum::<f64>().sqrt()
+        a.0.iter()
+            .zip(&b.0)
+            .map(|(x, y)| (x - y).powi(2))
+            .sum::<f64>()
+            .sqrt()
     }
 }
 
-fn sigmoid(x: f64) -> f64 { 1.0 / (1.0 + (-x).exp()) }
+fn sigmoid(x: f64) -> f64 {
+    1.0 / (1.0 + (-x).exp())
+}
 fn forward(w: &[f64], x0: f64, x1: f64) -> f64 {
     let h0 = sigmoid(w[0] * x0 + w[1] * x1 + w[2]);
     let h1 = sigmoid(w[3] * x0 + w[4] * x1 + w[5]);
     sigmoid(w[6] * h0 + w[7] * h1 + w[8])
 }
 fn xor_fitness(net: &Net) -> f64 {
-    let cases = [((0.0, 0.0), 0.0), ((0.0, 1.0), 1.0), ((1.0, 0.0), 1.0), ((1.0, 1.0), 0.0)];
-    let mse: f64 = cases.iter().map(|((a, b), t)| (forward(&net.0, *a, *b) - t).powi(2)).sum::<f64>() / 4.0;
+    let cases = [
+        ((0.0, 0.0), 0.0),
+        ((0.0, 1.0), 1.0),
+        ((1.0, 0.0), 1.0),
+        ((1.0, 1.0), 0.0),
+    ];
+    let mse: f64 = cases
+        .iter()
+        .map(|((a, b), t)| (forward(&net.0, *a, *b) - t).powi(2))
+        .sum::<f64>()
+        / 4.0;
     1.0 - mse
 }
 
 // ---------------- unit circle problem ----------------
 
 #[derive(Clone)]
-struct Point { x: f64, y: f64 }
+struct Point {
+    x: f64,
+    y: f64,
+}
 
 struct PointGenetics;
 impl Genetic for PointGenetics {
     type Genome = Point;
     fn random(&self, rng: &mut impl Rng) -> Point {
-        Point { x: rng.random_range(-2.0..2.0), y: rng.random_range(-2.0..2.0) }
+        Point {
+            x: rng.random_range(-2.0..2.0),
+            y: rng.random_range(-2.0..2.0),
+        }
     }
     fn cross(&self, a: &Point, b: &Point, _rng: &mut impl Rng) -> Point {
-        Point { x: (a.x + b.x) / 2.0, y: (a.y + b.y) / 2.0 }
+        Point {
+            x: (a.x + b.x) / 2.0,
+            y: (a.y + b.y) / 2.0,
+        }
     }
     fn mutate(&self, g: &Point, rng: &mut impl Rng) -> Point {
-        Point { x: g.x + rng.random_range(-0.2..0.2), y: g.y + rng.random_range(-0.2..0.2) }
+        Point {
+            x: g.x + rng.random_range(-0.2..0.2),
+            y: g.y + rng.random_range(-0.2..0.2),
+        }
     }
     fn gene_dist(&self, a: &Point, b: &Point) -> f64 {
         ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt()
@@ -82,8 +114,12 @@ fn ring_fitness(p: &Point) -> f64 {
 
 /// Step a strategy `cap` times, recording (trial, best_fitness) each step.
 /// Returns the history and the first trial index where best >= threshold.
-fn run_history<St, F>(strat: &mut St, fitness: F, cap: usize, threshold: f64)
-    -> (Vec<(usize, f64)>, Option<usize>)
+fn run_history<St, F>(
+    strat: &mut St,
+    fitness: F,
+    cap: usize,
+    threshold: f64,
+) -> (Vec<(usize, f64)>, Option<usize>)
 where
     St: EvolutionStrategy<Score = f64>,
     F: Fn(&<St::Genetic as Genetic>::Genome) -> f64,
@@ -95,8 +131,12 @@ where
         let g = strat.next();
         let s = fitness(&g);
         strat.report(g, s);
-        if s > best { best = s; }
-        if hit.is_none() && best >= threshold { hit = Some(t); }
+        if s > best {
+            best = s;
+        }
+        if hit.is_none() && best >= threshold {
+            hit = Some(t);
+        }
         hist.push((t, best));
     }
     (hist, hit)
@@ -110,7 +150,11 @@ fn write_convergence(path: &str, classic: &[(usize, f64)], ssea: &[(usize, f64)]
     for i in 0..n {
         let c = classic.get(i).map(|x| x.1).unwrap_or(f64::NAN);
         let s = ssea.get(i).map(|x| x.1).unwrap_or(f64::NAN);
-        let t = classic.get(i).or_else(|| ssea.get(i)).map(|x| x.0).unwrap_or(i);
+        let t = classic
+            .get(i)
+            .or_else(|| ssea.get(i))
+            .map(|x| x.0)
+            .unwrap_or(i);
         writeln!(w, "{t},{c},{s}").unwrap();
     }
 }
@@ -133,26 +177,50 @@ fn main() {
 
     let mut classic = ClassicPopulation::new(
         NetGenetics,
-        ClassicPopulationInfo { pop_size: 200, tournament: 2, mutation_rate: 0.9, seed: 7 },
+        ClassicPopulationInfo {
+            pop_size: 200,
+            tournament: 2,
+            mutation_rate: 0.9,
+            seed: 7,
+        },
     );
     let (c_hist, c_hit) = run_history(&mut classic, xor_fitness, cap, thr);
 
     let mut ssea = SoftStochastic::new(
         NetGenetics,
-        SoftStochasticInfo { target: 120, temperature: 0.05, novelty_weight: 0.05, knn: 5, seed: 7 },
+        SoftStochasticInfo {
+            target: 120,
+            temperature: 0.1,
+            novelty_weight: 0.2,
+            knn: 5,
+            seed: 7,
+        },
     );
     let (s_hist, s_hit) = run_history(&mut ssea, xor_fitness, cap, thr);
 
     write_convergence("data/xor_convergence.csv", &c_hist, &s_hist);
-    println!("XOR classic: best={:.4} hit@{:?}", c_hist.last().unwrap().1, c_hit);
-    println!("XOR ssea:    best={:.4} hit@{:?}", s_hist.last().unwrap().1, s_hit);
+    println!(
+        "XOR classic: best={:.4} hit@{:?}",
+        c_hist.last().unwrap().1,
+        c_hit
+    );
+    println!(
+        "XOR ssea:    best={:.4} hit@{:?}",
+        s_hist.last().unwrap().1,
+        s_hit
+    );
 
     // ---- unit circle: final populations ----
     let circle_cap = 20_000usize;
 
     let mut c_circle = ClassicPopulation::new(
         PointGenetics,
-        ClassicPopulationInfo { pop_size: 300, tournament: 3, mutation_rate: 0.2, seed: 13 },
+        ClassicPopulationInfo {
+            pop_size: 300,
+            tournament: 3,
+            mutation_rate: 0.2,
+            seed: 13,
+        },
     );
     let _ = run_history(&mut c_circle, ring_fitness, circle_cap, 2.0); // threshold unreachable -> just run
     let c_pts = c_circle.population();
@@ -160,7 +228,13 @@ fn main() {
 
     let mut s_circle = SoftStochastic::new(
         PointGenetics,
-        SoftStochasticInfo { target: 300, temperature: 0.2, novelty_weight: 0.6, knn: 5, seed: 13 },
+        SoftStochasticInfo {
+            target: 300,
+            temperature: 0.2,
+            novelty_weight: 0.6,
+            knn: 5,
+            seed: 13,
+        },
     );
     let _ = run_history(&mut s_circle, ring_fitness, circle_cap, 2.0);
     let s_pts = s_circle.pool_genomes();
@@ -171,7 +245,9 @@ fn main() {
         for p in pts {
             if ring_fitness(p) >= 0.95 {
                 let mut a = p.y.atan2(p.x);
-                if a < 0.0 { a += std::f64::consts::TAU; }
+                if a < 0.0 {
+                    a += std::f64::consts::TAU;
+                }
                 hit[((a / std::f64::consts::TAU) * 12.0) as usize % 12] = true;
             }
         }

@@ -45,12 +45,14 @@ ax.plot(trial, ssea, color=SSEA, lw=1.8, label="SoftStochastic (SSEA)")
 ax.axhline(0.98, color="gray", ls="--", lw=1, alpha=0.7)
 ax.text(trial[-1], 0.982, "0.98 solve threshold", ha="right", va="bottom",
         color="gray", fontsize=9)
-for hit, col, name in [(c_hit, CLASSIC, "classic"), (s_hit, SSEA, "ssea")]:
+for hit, col, name, ytext in [(c_hit, CLASSIC, "classic", 0.70),
+                              (s_hit, SSEA, "ssea", 0.58)]:
     if hit is not None:
         ax.axvline(trial[hit], color=col, ls=":", lw=1.2, alpha=0.8)
-        ax.annotate(f"{name} solved\n@ {int(trial[hit]):,} evals",
-                    xy=(trial[hit], 0.5), color=col, fontsize=9,
-                    ha="center", va="center",
+        ax.annotate(f"{name} solved @ {int(trial[hit]):,} evals",
+                    xy=(trial[hit], 0.98), xytext=(trial[-1] * 0.30, ytext),
+                    color=col, fontsize=9, ha="left", va="center",
+                    arrowprops=dict(arrowstyle="->", color=col, alpha=0.7),
                     bbox=dict(boxstyle="round,pad=0.3", fc="white", ec=col, alpha=0.9))
 ax.set_xlabel("evaluations (trials)")
 ax.set_ylabel("best fitness  (1 − MSE)")

@@ -36,7 +36,13 @@ fn evaluate<G, S, F>(batch: Vec<G>, fitness: &F) -> Vec<(G, S)>
 where
     F: Fn(&G) -> S,
 {
-    batch.into_iter().map(|g| { let s = fitness(&g); (g, s) }).collect()
+    batch
+        .into_iter()
+        .map(|g| {
+            let s = fitness(&g);
+            (g, s)
+        })
+        .collect()
 }
 
 /// Evaluate a batch of genomes in parallel.
@@ -48,7 +54,13 @@ where
     S: Send,
 {
     use rayon::prelude::*;
-    batch.into_par_iter().map(|g| { let s = fitness(&g); (g, s) }).collect()
+    batch
+        .into_par_iter()
+        .map(|g| {
+            let s = fitness(&g);
+            (g, s)
+        })
+        .collect()
 }
 
 /// Drive a self-contained strategy against `fitness` until `cfg.stop`.
@@ -71,7 +83,9 @@ where
     loop {
         // Hard cap, applied regardless of `stop`.
         if let Some(cap) = cfg.max_trials {
-            if trials >= cap { break; }
+            if trials >= cap {
+                break;
+            }
         }
         // Stop checks BEFORE producing more work.
         match &cfg.stop {
@@ -79,7 +93,9 @@ where
             Stop::Trials(t) if trials >= *t => break,
             Stop::Until(pred) => {
                 if let Some((_, s)) = strategy.best() {
-                    if pred(s) { break; }
+                    if pred(s) {
+                        break;
+                    }
                 }
             }
             _ => {}
@@ -101,7 +117,12 @@ where
         Some((g, s)) => (Some(g.clone()), Some(s.clone())),
         None => (None, None),
     };
-    Outcome { best_genome, best_score, generations, trials }
+    Outcome {
+        best_genome,
+        best_score,
+        generations,
+        trials,
+    }
 }
 
 #[cfg(test)]
@@ -116,10 +137,18 @@ mod tests {
     struct UnitGenetics;
     impl Genetic for UnitGenetics {
         type Genome = f64;
-        fn random(&self, rng: &mut impl Rng) -> f64 { rng.random::<f64>() }
-        fn cross(&self, a: &f64, b: &f64, _r: &mut impl Rng) -> f64 { (a + b) / 2.0 }
-        fn mutate(&self, g: &f64, rng: &mut impl Rng) -> f64 { (g + rng.random_range(-0.1..0.1)).clamp(0.0, 1.0) }
-        fn gene_dist(&self, a: &f64, b: &f64) -> f64 { (a - b).abs() }
+        fn random(&self, rng: &mut impl Rng) -> f64 {
+            rng.random::<f64>()
+        }
+        fn cross(&self, a: &f64, b: &f64, _r: &mut impl Rng) -> f64 {
+            (a + b) / 2.0
+        }
+        fn mutate(&self, g: &f64, rng: &mut impl Rng) -> f64 {
+            (g + rng.random_range(-0.1..0.1)).clamp(0.0, 1.0)
+        }
+        fn gene_dist(&self, a: &f64, b: &f64) -> f64 {
+            (a - b).abs()
+        }
     }
 
     /// Trivial self-contained strategy: emits randoms, keeps the single best.
@@ -130,7 +159,11 @@ mod tests {
     }
     impl KeepBest {
         fn new(seed: u64) -> Self {
-            Self { genetics: UnitGenetics, rng: ChaCha8Rng::seed_from_u64(seed), best: None }
+            Self {
+                genetics: UnitGenetics,
+                rng: ChaCha8Rng::seed_from_u64(seed),
+                best: None,
+            }
         }
     }
     impl EvolutionStrategy for KeepBest {
@@ -152,7 +185,11 @@ mod tests {
     #[test]
     fn stops_after_trial_budget() {
         let mut strat = KeepBest::new(3);
-        let cfg = RunConfig { stop: Stop::Trials(50), batch_size: 1, max_trials: None };
+        let cfg = RunConfig {
+            stop: Stop::Trials(50),
+            batch_size: 1,
+            max_trials: None,
+        };
         let out = run(&cfg, &mut strat, |x: &f64| *x);
         assert_eq!(out.trials, 50);
         assert!(out.best_score.unwrap() >= 0.0);
@@ -161,7 +198,11 @@ mod tests {
     #[test]
     fn batch_size_rounds_up_trials() {
         let mut strat = KeepBest::new(3);
-        let cfg = RunConfig { stop: Stop::Generations(3), batch_size: 4, max_trials: None };
+        let cfg = RunConfig {
+            stop: Stop::Generations(3),
+            batch_size: 4,
+            max_trials: None,
+        };
         let out = run(&cfg, &mut strat, |x: &f64| *x);
         assert_eq!(out.generations, 3);
         assert_eq!(out.trials, 12);
@@ -170,7 +211,11 @@ mod tests {
     #[test]
     fn until_predicate_stops_run() {
         let mut strat = KeepBest::new(3);
-        let cfg = RunConfig { stop: Stop::Until(Box::new(|s: &f64| *s > 0.9)), batch_size: 1, max_trials: None };
+        let cfg = RunConfig {
+            stop: Stop::Until(Box::new(|s: &f64| *s > 0.9)),
+            batch_size: 1,
+            max_trials: None,
+        };
         let out = run(&cfg, &mut strat, |x: &f64| *x);
         assert!(out.best_score.unwrap() > 0.9);
     }

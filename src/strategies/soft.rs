@@ -14,13 +14,23 @@ pub struct SoftStochasticInfo {
 
 impl Default for SoftStochasticInfo {
     fn default() -> Self {
-        Self { target: 100, temperature: 0.2, novelty_weight: 0.5, knn: 5, seed: 0 }
+        Self {
+            target: 100,
+            temperature: 0.2,
+            novelty_weight: 0.5,
+            knn: 5,
+            seed: 0,
+        }
     }
 }
 
 struct Member<G> {
     genome: G,
     fitness: f64,
+    /// Cached genetic novelty (mean gene_dist to knn nearest). Refreshed exactly
+    /// for a newly inserted member and periodically in bulk for the whole pool,
+    /// so the per-report cull stays O(pool) instead of O(pool²).
+    novelty: f64,
 }
 
 /// Stochastic Soft Evolution Algorithm: steady-state, soft-culling, no hard
@@ -35,6 +45,9 @@ pub struct SoftStochastic<X: Genetic> {
     knn: usize,
     pool: Vec<Member<X::Genome>>,
     best: Option<(X::Genome, f64)>,
+    /// Bulk-refresh every this many culls (amortizes the O(pool²) recompute).
+    refresh_interval: usize,
+    since_refresh: usize,
 }
 
 impl<X: Genetic> SoftStochastic<X> {
@@ -48,6 +61,8 @@ impl<X: Genetic> SoftStochastic<X> {
             knn: info.knn.max(1),
             pool: Vec::new(),
             best: None,
+            refresh_interval: (info.target.max(2) / 8).max(4),
+            since_refresh: 0,
         }
     }
 
@@ -103,23 +118,42 @@ impl<X: Genetic> SoftStochastic<X> {
         dists.iter().take(k).sum::<f64>() / k as f64
     }
 
-    /// Soft cull, run from `report` when over capacity. Uses owned genetics for
-    /// genuine genetic novelty and owned rng for reproducibility.
-    fn soft_cull(&mut self) {
-        let (min_f, max_f) = self
-            .pool
-            .iter()
-            .fold((f64::MAX, f64::MIN), |(lo, hi), m| (lo.min(m.fitness), hi.max(m.fitness)));
-        let fspan = (max_f - min_f).max(1e-9);
-
-        let novelty: Vec<f64> = (0..self.pool.len())
+    /// Recompute every member's cached novelty from scratch. O(pool²); called
+    /// only every `refresh_interval` culls to bound staleness without paying the
+    /// quadratic cost on every report.
+    fn refresh_novelty(&mut self) {
+        let novs: Vec<f64> = (0..self.pool.len())
             .map(|i| {
-                Self::genetic_novelty(&self.genetics, &self.pool, self.knn, &self.pool[i].genome, Some(i))
+                Self::genetic_novelty(
+                    &self.genetics,
+                    &self.pool,
+                    self.knn,
+                    &self.pool[i].genome,
+                    Some(i),
+                )
             })
             .collect();
-        let (min_n, max_n) = novelty
-            .iter()
-            .fold((f64::MAX, f64::MIN), |(lo, hi), n| (lo.min(*n), hi.max(*n)));
+        for (m, n) in self.pool.iter_mut().zip(novs) {
+            m.novelty = n;
+        }
+    }
+
+    /// Soft cull, run from `report` when over capacity. Uses cached novelty so
+    /// the survival pass is O(pool); the cache is bulk-refreshed periodically.
+    fn soft_cull(&mut self) {
+        self.since_refresh += 1;
+        if self.since_refresh >= self.refresh_interval {
+            self.refresh_novelty();
+            self.since_refresh = 0;
+        }
+
+        let (min_f, max_f) = self.pool.iter().fold((f64::MAX, f64::MIN), |(lo, hi), m| {
+            (lo.min(m.fitness), hi.max(m.fitness))
+        });
+        let fspan = (max_f - min_f).max(1e-9);
+        let (min_n, max_n) = self.pool.iter().fold((f64::MAX, f64::MIN), |(lo, hi), m| {
+            (lo.min(m.novelty), hi.max(m.novelty))
+        });
         let nspan = (max_n - min_n).max(1e-9);
 
         let pressure = (self.pool.len() as f64 / self.target as f64).max(1e-3);
@@ -129,7 +163,7 @@ impl<X: Genetic> SoftStochastic<X> {
         let drained: Vec<Member<X::Genome>> = std::mem::take(&mut self.pool);
         let mut survivors: Vec<Member<X::Genome>> = Vec::with_capacity(drained.len());
         let mut kept_best = false;
-        for (i, m) in drained.into_iter().enumerate() {
+        for m in drained.into_iter() {
             // Keep exactly one copy of the global best unconditionally.
             if !kept_best && best_fit.map_or(false, |bf| (m.fitness - bf).abs() < f64::EPSILON) {
                 kept_best = true;
@@ -137,7 +171,7 @@ impl<X: Genetic> SoftStochastic<X> {
                 continue;
             }
             let nf = (m.fitness - min_f) / fspan;
-            let nn = (novelty[i] - min_n) / nspan;
+            let nn = (m.novelty - min_n) / nspan;
             let combined = ((1.0 - w) * nf + w * nn).clamp(0.0, 1.0);
             let p_survive = combined.powf(pressure).clamp(0.0, 1.0);
             if self.rng.random_bool(p_survive) {
@@ -180,7 +214,13 @@ impl<X: Genetic> EvolutionStrategy for SoftStochastic<X> {
         if self.best.as_ref().map_or(true, |(_, s)| fit > *s) {
             self.best = Some((genome.clone(), fit));
         }
-        self.pool.push(Member { genome, fitness: fit });
+        // Compute the new member's novelty against the current pool once, O(pool).
+        let novelty = Self::genetic_novelty(&self.genetics, &self.pool, self.knn, &genome, None);
+        self.pool.push(Member {
+            genome,
+            fitness: fit,
+            novelty,
+        });
         if self.pool.len() > self.target {
             self.soft_cull();
         }
@@ -194,24 +234,40 @@ impl<X: Genetic> EvolutionStrategy for SoftStochastic<X> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::trial::{run, RunConfig, Stop};
+    use crate::trial::{RunConfig, Stop, run};
 
     struct UnitGenetics;
     impl Genetic for UnitGenetics {
         type Genome = f64;
-        fn random(&self, rng: &mut impl Rng) -> f64 { rng.random::<f64>() }
-        fn cross(&self, a: &f64, b: &f64, _r: &mut impl Rng) -> f64 { (a + b) / 2.0 }
-        fn mutate(&self, g: &f64, rng: &mut impl Rng) -> f64 { (g + rng.random_range(-0.05..0.05)).clamp(0.0, 1.0) }
-        fn gene_dist(&self, a: &f64, b: &f64) -> f64 { (a - b).abs() }
+        fn random(&self, rng: &mut impl Rng) -> f64 {
+            rng.random::<f64>()
+        }
+        fn cross(&self, a: &f64, b: &f64, _r: &mut impl Rng) -> f64 {
+            (a + b) / 2.0
+        }
+        fn mutate(&self, g: &f64, rng: &mut impl Rng) -> f64 {
+            (g + rng.random_range(-0.05..0.05)).clamp(0.0, 1.0)
+        }
+        fn gene_dist(&self, a: &f64, b: &f64) -> f64 {
+            (a - b).abs()
+        }
     }
 
     #[test]
     fn pool_grows_from_empty_and_improves() {
         let mut strat = SoftStochastic::new(
             UnitGenetics,
-            SoftStochasticInfo { target: 20, seed: 5, ..Default::default() },
+            SoftStochasticInfo {
+                target: 20,
+                seed: 5,
+                ..Default::default()
+            },
         );
-        let cfg = RunConfig { stop: Stop::Trials(200), batch_size: 1, max_trials: None };
+        let cfg = RunConfig {
+            stop: Stop::Trials(200),
+            batch_size: 1,
+            max_trials: None,
+        };
         let out = run(&cfg, &mut strat, |x: &f64| *x);
         assert!(out.best_score.unwrap() > 0.8, "got {:?}", out.best_score);
     }
@@ -220,13 +276,21 @@ mod tests {
     fn pool_does_not_grow_unbounded() {
         let mut strat = SoftStochastic::new(
             UnitGenetics,
-            SoftStochasticInfo { target: 10, seed: 1, ..Default::default() },
+            SoftStochasticInfo {
+                target: 10,
+                seed: 1,
+                ..Default::default()
+            },
         );
         for _ in 0..500 {
             let g = strat.next();
             strat.report(g, g);
         }
         // Soft cull keeps the pool near target, never runaway.
-        assert!(strat.pool.len() <= 10 * 3, "pool grew to {}", strat.pool.len());
+        assert!(
+            strat.pool.len() <= 10 * 3,
+            "pool grew to {}",
+            strat.pool.len()
+        );
     }
 }

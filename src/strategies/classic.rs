@@ -13,7 +13,12 @@ pub struct ClassicPopulationInfo {
 
 impl Default for ClassicPopulationInfo {
     fn default() -> Self {
-        Self { pop_size: 100, tournament: 3, mutation_rate: 0.1, seed: 0 }
+        Self {
+            pop_size: 100,
+            tournament: 3,
+            mutation_rate: 0.1,
+            seed: 0,
+        }
     }
 }
 
@@ -119,15 +124,23 @@ impl<X: Genetic> EvolutionStrategy for ClassicPopulation<X> {
 mod tests {
     use super::*;
     use crate::strategy::EvolutionStrategy;
-    use crate::trial::{run, RunConfig, Stop};
+    use crate::trial::{RunConfig, Stop, run};
 
     struct UnitGenetics;
     impl Genetic for UnitGenetics {
         type Genome = f64;
-        fn random(&self, rng: &mut impl Rng) -> f64 { rng.random::<f64>() }
-        fn cross(&self, a: &f64, b: &f64, _r: &mut impl Rng) -> f64 { (a + b) / 2.0 }
-        fn mutate(&self, g: &f64, rng: &mut impl Rng) -> f64 { (g + rng.random_range(-0.05..0.05)).clamp(0.0, 1.0) }
-        fn gene_dist(&self, a: &f64, b: &f64) -> f64 { (a - b).abs() }
+        fn random(&self, rng: &mut impl Rng) -> f64 {
+            rng.random::<f64>()
+        }
+        fn cross(&self, a: &f64, b: &f64, _r: &mut impl Rng) -> f64 {
+            (a + b) / 2.0
+        }
+        fn mutate(&self, g: &f64, rng: &mut impl Rng) -> f64 {
+            (g + rng.random_range(-0.05..0.05)).clamp(0.0, 1.0)
+        }
+        fn gene_dist(&self, a: &f64, b: &f64) -> f64 {
+            (a - b).abs()
+        }
     }
 
     #[test]
@@ -135,9 +148,17 @@ mod tests {
         // Fitness = the value itself; optimum is 1.0.
         let mut strat = ClassicPopulation::new(
             UnitGenetics,
-            ClassicPopulationInfo { pop_size: 30, seed: 11, ..Default::default() },
+            ClassicPopulationInfo {
+                pop_size: 30,
+                seed: 11,
+                ..Default::default()
+            },
         );
-        let cfg = RunConfig { stop: Stop::Trials(3000), batch_size: 1, max_trials: None };
+        let cfg = RunConfig {
+            stop: Stop::Trials(3000),
+            batch_size: 1,
+            max_trials: None,
+        };
         let out = run(&cfg, &mut strat, |x: &f64| *x);
         assert!(out.best_score.unwrap() > 0.95, "got {:?}", out.best_score);
     }
