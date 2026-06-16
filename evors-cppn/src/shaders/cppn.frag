@@ -13,6 +13,9 @@ layout(std430, binding = 1) readonly buffer Conns { uvec2 conns[]; };
 uniform uint u_node_count;
 uniform uvec3 u_out_slots;
 uniform vec2 u_res;
+// Output alpha. 1.0 for opaque eval renders; < 1.0 for the display pass, where
+// alpha blending into an accumulation buffer produces a smooth temporal average.
+uniform float u_alpha;
 
 const int MAX_NODES = 256;
 
@@ -49,6 +52,6 @@ void main() {
         clamp(value[u_out_slots.x], 0.0, 1.0),
         clamp(value[u_out_slots.y], 0.0, 1.0),
         clamp(value[u_out_slots.z], 0.0, 1.0),
-        1.0
+        u_alpha
     );
 }

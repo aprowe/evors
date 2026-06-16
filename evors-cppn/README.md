@@ -4,10 +4,19 @@ Evolve images with **CPPN-NEAT**, evaluated on the GPU. A CPPN genome (a NEAT
 network whose nodes carry activation functions) is rendered per-pixel by a
 fragment shader and scored against a target image.
 
-This crate is being built in three sub-projects. **Sub-project A (done)** is the
-headless evaluation core; **B** adds the evolution loop with a fitness + novelty
-metric; **C** is the egui app. GL plumbing is adapted from
-`~/projects/soap-in-a-tub` (OpenGL 4.3 core, dedicated-GL-thread).
+Built in three sub-projects, all done:
+- **A** — headless GPU evaluation core (encode → interpreter shader → fitness).
+- **B** — `ImageTrial`: evolve toward a target with SSEA using genetic **and**
+  solution-distance novelty.
+- **C** — the egui app (`cppn-gui`): live convergence controls; the champion is
+  rendered **directly to the window with GL** and EMA-accumulated so it converges
+  smoothly.
+
+GL plumbing is adapted from `~/projects/soap-in-a-tub` (OpenGL 4.3 core).
+
+```bash
+cargo run --release -p evors-cppn --bin cppn-gui   # the interactive app
+```
 
 ## Sub-project A — CPPN → GPU → fitness
 

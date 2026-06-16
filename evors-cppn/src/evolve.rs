@@ -61,6 +61,17 @@ impl ImageTrial {
         }
     }
 
+    /// Live convergence controls (forwarded to the strategy).
+    pub fn set_novelty_weight(&mut self, w: f64) {
+        self.strategy.set_novelty_weight(w);
+    }
+    pub fn set_behavior_weight(&mut self, w: f64) {
+        self.strategy.set_behavior_weight(w);
+    }
+    pub fn set_temperature(&mut self, t: f64) {
+        self.strategy.set_temperature(t);
+    }
+
     pub fn best_fitness(&self) -> f64 {
         self.best_fitness
     }

@@ -82,6 +82,17 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> SoftStochastic<X, S> {
         self.pool.len()
     }
 
+    /// Live convergence controls (e.g. driven by a GUI).
+    pub fn set_novelty_weight(&mut self, w: f64) {
+        self.novelty_weight = w.clamp(0.0, 1.0);
+    }
+    pub fn set_behavior_weight(&mut self, w: f64) {
+        self.behavior_weight = w.clamp(0.0, 1.0);
+    }
+    pub fn set_temperature(&mut self, t: f64) {
+        self.temperature = t.max(1e-6);
+    }
+
     /// Snapshot of the maintained pool's genomes — useful for instrumentation
     /// and visualising the diverse solution set.
     pub fn pool_genomes(&self) -> Vec<X::Genome> {

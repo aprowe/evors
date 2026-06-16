@@ -17,5 +17,7 @@ pub mod score;
 pub use cppn::{CppnGenetics, CppnParams};
 pub use encode::{EncodeError, Encoded, MAX_NODES, encode};
 pub use evolve::{ImageTrial, demo_target};
-pub use gpu::{Eval, EvalConfig, GpuEvaluator};
+pub use gpu::{
+    CppnRenderer, Eval, EvalConfig, GpuEvaluator, downsample_rgb, fitness_of, pack_buffers,
+};
 pub use score::ImgScore;

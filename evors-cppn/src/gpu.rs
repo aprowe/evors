@@ -95,18 +95,7 @@ impl GpuEvaluator {
     /// readback (`eval_res² × 4`). `None` if the genome can't be encoded.
     fn render_rgba(&self, genome: &NeatGenome) -> Option<Vec<f32>> {
         let enc = encode(genome, &CppnGenetics::INPUT_IDS, &CppnGenetics::OUTPUT_IDS).ok()?;
-
-        let mut nodes = Vec::with_capacity(enc.nodes.len() * 4);
-        for ns in &enc.nodes {
-            nodes.extend_from_slice(&[ns.activation, ns.conn_start, ns.conn_count, 0]);
-        }
-        let mut conns = Vec::with_capacity(enc.conns.len() * 2);
-        for cs in &enc.conns {
-            conns.extend_from_slice(&[cs.source, cs.weight.to_bits()]);
-        }
-        if conns.is_empty() {
-            conns.extend_from_slice(&[0, 0]); // never indexed (conn_count 0); keep buffer non-empty
-        }
+        let (nodes, conns) = pack_buffers(&enc);
 
         let (reply_tx, reply_rx) = sync_channel(0);
         self.tx
@@ -128,7 +117,7 @@ impl GpuEvaluator {
 }
 
 /// `1 - mean squared error` over all RGB samples (both in `[0, 1]`).
-fn fitness_of(render: &[f32], target: &[f32]) -> f64 {
+pub fn fitness_of(render: &[f32], target: &[f32]) -> f64 {
     let n = render.len().min(target.len());
     if n == 0 {
         return 0.0;
@@ -149,7 +138,7 @@ fn rgba_to_rgb(rgba: &[f32]) -> Vec<f32> {
 }
 
 /// Box-downsample an RGB image from `sw×sh` to `dw×dh`.
-fn downsample_rgb(src: &[f32], sw: u32, sh: u32, dw: u32, dh: u32) -> Vec<f32> {
+pub fn downsample_rgb(src: &[f32], sw: u32, sh: u32, dw: u32, dh: u32) -> Vec<f32> {
     let mut out = vec![0.0f32; (dw * dh * 3) as usize];
     for dy in 0..dh {
         for dx in 0..dw {
@@ -230,7 +219,7 @@ fn gl_thread_main(eval_res: u32, rx: Receiver<RenderReq>) {
     let (_ctx, gl) = grabber
         .0
         .expect("evors-cppn requires an OpenGL 4.3 context");
-    let renderer = Renderer::new(&gl, eval_res);
+    let renderer = CppnRenderer::new(&gl, eval_res);
 
     for req in rx {
         let pixels = renderer.render(&gl, &req.nodes, &req.conns, req.node_count, req.out_slots);
@@ -238,7 +227,11 @@ fn gl_thread_main(eval_res: u32, rx: Receiver<RenderReq>) {
     }
 }
 
-struct Renderer {
+/// A CPPN interpreter program + offscreen FBO + SSBOs, bound to a caller-owned
+/// `glow::Context`. Lets the GUI render on eframe's GL context (one event loop
+/// per process: a second winit context can't coexist), while `GpuEvaluator`
+/// drives its own on a dedicated thread for headless use.
+pub struct CppnRenderer {
     program: glow::Program,
     vao: glow::VertexArray,
     fbo: glow::Framebuffer,
@@ -247,11 +240,12 @@ struct Renderer {
     u_node_count: Option<glow::UniformLocation>,
     u_out_slots: Option<glow::UniformLocation>,
     u_res: Option<glow::UniformLocation>,
+    u_alpha: Option<glow::UniformLocation>,
     res: i32,
 }
 
-impl Renderer {
-    fn new(gl: &glow::Context, eval_res: u32) -> Self {
+impl CppnRenderer {
+    pub fn new(gl: &glow::Context, eval_res: u32) -> Self {
         use glow::HasContext as _;
         let res = eval_res as i32;
         unsafe {
@@ -298,6 +292,7 @@ impl Renderer {
             let u_node_count = gl.get_uniform_location(program, "u_node_count");
             let u_out_slots = gl.get_uniform_location(program, "u_out_slots");
             let u_res = gl.get_uniform_location(program, "u_res");
+            let u_alpha = gl.get_uniform_location(program, "u_alpha");
 
             Self {
                 program,
@@ -308,6 +303,7 @@ impl Renderer {
                 u_node_count,
                 u_out_slots,
                 u_res,
+                u_alpha,
                 res,
             }
         }
@@ -339,8 +335,10 @@ impl Renderer {
             gl.bind_buffer_base(glow::SHADER_STORAGE_BUFFER, 1, Some(self.conns_ssbo));
 
             gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.fbo));
+            gl.disable(glow::BLEND);
             gl.viewport(0, 0, self.res, self.res);
             gl.use_program(Some(self.program));
+            gl.uniform_1_f32(self.u_alpha.as_ref(), 1.0);
             gl.uniform_1_u32(self.u_node_count.as_ref(), node_count);
             gl.uniform_3_u32(
                 self.u_out_slots.as_ref(),
@@ -371,6 +369,39 @@ impl Renderer {
             buf
         }
     }
+
+    pub fn eval_res(&self) -> u32 {
+        self.res as u32
+    }
+
+    /// Encode and render `genome` to `eval_res² × 3` RGB (row 0 = bottom). An
+    /// unrenderable genome yields black.
+    pub fn render_rgb(&self, gl: &glow::Context, genome: &NeatGenome) -> Vec<f32> {
+        match encode(genome, &CppnGenetics::INPUT_IDS, &CppnGenetics::OUTPUT_IDS) {
+            Ok(enc) => {
+                let (nodes, conns) = pack_buffers(&enc);
+                let rgba = self.render(gl, &nodes, &conns, enc.node_count, enc.output_slots);
+                rgba_to_rgb(&rgba)
+            }
+            Err(_) => vec![0.0; (self.res * self.res * 3) as usize],
+        }
+    }
+}
+
+/// Flatten an encoded genome into the two SSBO `u32` arrays.
+pub fn pack_buffers(enc: &crate::encode::Encoded) -> (Vec<u32>, Vec<u32>) {
+    let mut nodes = Vec::with_capacity(enc.nodes.len() * 4);
+    for ns in &enc.nodes {
+        nodes.extend_from_slice(&[ns.activation, ns.conn_start, ns.conn_count, 0]);
+    }
+    let mut conns = Vec::with_capacity(enc.conns.len() * 2);
+    for cs in &enc.conns {
+        conns.extend_from_slice(&[cs.source, cs.weight.to_bits()]);
+    }
+    if conns.is_empty() {
+        conns.extend_from_slice(&[0, 0]);
+    }
+    (nodes, conns)
 }
 
 fn link_program(gl: &glow::Context, vert: &str, frag: &str) -> glow::Program {
