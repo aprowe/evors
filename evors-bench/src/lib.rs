@@ -4,6 +4,7 @@ pub mod de;
 pub mod genetics;
 pub mod harness;
 pub mod problems;
+pub mod two_circles;
 
 pub use de::{DeInfo, Differential};
 pub use genetics::VecGenetics;

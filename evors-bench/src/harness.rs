@@ -7,6 +7,7 @@ use evors::genetic::Genetic;
 use evors::population::PopulationView;
 use evors::strategies::{
     ClassicPopulation, ClassicPopulationInfo, SoftStochastic, SoftStochasticInfo,
+    SpeciatedSoftStochastic, SpeciatedSoftStochasticInfo,
 };
 use evors::strategy::EvolutionStrategy;
 use evors::{RecordingObserver, RunConfig, Stop, run_observed};
@@ -25,6 +26,7 @@ pub struct RunResult {
 pub enum Strat {
     Classic(ClassicPopulationInfo),
     Ssea(SoftStochasticInfo),
+    Speciated(SpeciatedSoftStochasticInfo),
     De(DeInfo),
 }
 
@@ -77,6 +79,15 @@ pub fn run_config(p: &Problem, cfg: &Config, budget: usize, seed: u64) -> RunRes
             let mut info = info.clone();
             info.seed = seed;
             let mut strat = SoftStochastic::new(genetics, info);
+            run_one(p, &mut strat, budget)
+        }
+        Strat::Speciated(info) => {
+            let mut info = *info;
+            info.seed = seed;
+            let mut strat = SpeciatedSoftStochastic::new(
+                VecGenetics::new(p.bounds.clone(), cfg.mutation_step),
+                info,
+            );
             run_one(p, &mut strat, budget)
         }
         Strat::De(info) => {
@@ -207,6 +218,16 @@ pub fn default_configs() -> Vec<Config> {
                 behavior_weight: 0.0,
                 knn: 5,
                 seed: 0,
+            }),
+            mutation_step: 0.3,
+        });
+    }
+    for &(target, nw, loc) in &[(300usize, 0.6f64, 1.0f64), (300, 0.6, 3.0)] {
+        v.push(Config {
+            label: format!("speciated(target={target},nw={nw},loc={loc})"),
+            strat: Strat::Speciated(SpeciatedSoftStochasticInfo {
+                target, novelty_weight: nw, temperature: 0.2, behavior_weight: 0.0,
+                knn: 5, seed: 0, mate_locality: loc,
             }),
             mutation_step: 0.3,
         });
