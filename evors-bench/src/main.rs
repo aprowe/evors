@@ -51,7 +51,7 @@ fn write_results(results: &[Summary]) {
     for s in results {
         let evals = s.median_evals.map(|e| e.to_string()).unwrap_or_default();
         writeln!(
-            w, "{},{},{},{},{},{},{}",
+            w, "{},\"{}\",{},{},{},{},{}",
             s.problem, s.config, s.mean_best, s.mean_error, s.success_rate, evals, s.mean_coverage
         ).unwrap();
     }
@@ -60,7 +60,7 @@ fn write_results(results: &[Summary]) {
 fn write_convergence(problem: &str, summaries: &[Summary]) {
     let f = File::create(format!("data/bench/{problem}_convergence.csv")).unwrap();
     let mut w = BufWriter::new(f);
-    let labels: Vec<&str> = summaries.iter().map(|s| s.config.as_str()).collect();
+    let labels: Vec<String> = summaries.iter().map(|s| format!("\"{}\"", s.config)).collect();
     writeln!(w, "eval,{}", labels.join(",")).unwrap();
     let len = summaries.iter().map(|s| s.mean_convergence.len()).min().unwrap_or(0);
     for i in (0..len).step_by(50) {
@@ -76,7 +76,7 @@ fn write_scatter(problem: &str, summaries: &[Summary]) {
     for s in summaries {
         for x in &s.sample_pool {
             if x.len() >= 2 {
-                writeln!(w, "{},{},{}", s.config, x[0], x[1]).unwrap();
+                writeln!(w, "\"{}\",{},{}", s.config, x[0], x[1]).unwrap();
             }
         }
     }

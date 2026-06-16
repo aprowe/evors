@@ -163,3 +163,81 @@ if os.path.exists("data/neat_xor.csv"):
     fig.tight_layout()
     fig.savefig("charts/neat_xor.png")
     print("wrote charts/neat_xor.png")
+
+# ---------------- bench: convergence + coverage + scatter ----------------
+import glob
+if os.path.isdir("data/bench"):
+    os.makedirs("charts/bench", exist_ok=True)
+
+    # Per-problem convergence (one line per config).
+    for path in glob.glob("data/bench/*_convergence.csv"):
+        name = os.path.basename(path).replace("_convergence.csv", "")
+        with open(path) as f:
+            rows = list(csv.reader(f))
+        header, data = rows[0], np.array([[float(x) for x in r] for r in rows[1:]])
+        if data.size == 0:
+            continue
+        fig, ax = plt.subplots(figsize=(9, 5))
+        evals = data[:, 0]
+        for j, label in enumerate(header[1:], start=1):
+            ax.plot(evals, data[:, j], lw=1.4, label=label)
+        ax.set_xlabel("evaluations")
+        ax.set_ylabel("best-so-far objective (min)")
+        ax.set_title(f"{name} — convergence")
+        ax.legend(fontsize=7)
+        fig.tight_layout()
+        fig.savefig(f"charts/bench/{name}_convergence.png")
+        plt.close(fig)
+    print("wrote charts/bench/*_convergence.png")
+
+    # Coverage bars from results.csv (classic vs ssea max per problem).
+    if os.path.exists("data/bench/results.csv"):
+        with open("data/bench/results.csv") as f:
+            rows = list(csv.DictReader(f))
+        probs = sorted({r["problem"] for r in rows})
+        def best_cov(prob, kind):
+            vals = [float(r["mean_coverage"]) for r in rows
+                    if r["problem"] == prob and r["config"].startswith(kind)]
+            return max(vals) if vals else 0.0
+        classic = [best_cov(p, "classic") for p in probs]
+        ssea = [best_cov(p, "ssea") for p in probs]
+        x = np.arange(len(probs))
+        fig, ax = plt.subplots(figsize=(11, 5))
+        ax.bar(x - 0.2, classic, 0.4, label="ClassicPopulation", color="#d1495b")
+        ax.bar(x + 0.2, ssea, 0.4, label="SoftStochastic", color="#2a9d8f")
+        ax.set_xticks(x); ax.set_xticklabels(probs, rotation=30, ha="right")
+        ax.set_ylabel("basins covered (mean)")
+        ax.set_title("Basin coverage — Classic vs SSEA")
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig("charts/bench/coverage.png")
+        plt.close(fig)
+        print("wrote charts/bench/coverage.png")
+
+    # Final-pool scatter (best classic vs best ssea config) for multimodal probs.
+    for path in glob.glob("data/bench/*_scatter.csv"):
+        name = os.path.basename(path).replace("_scatter.csv", "")
+        with open(path) as f:
+            rows = list(csv.DictReader(f))
+        if not rows:
+            continue
+        # pick one classic and one ssea config present in the scatter.
+        def pts(kind):
+            xs = [(float(r["x"]), float(r["y"])) for r in rows if r["config"].startswith(kind)]
+            return np.array(xs) if xs else np.empty((0, 2))
+        c, s = pts("classic"), pts("ssea")
+        if len(c) == 0 and len(s) == 0:
+            continue
+        fig, axes = plt.subplots(1, 2, figsize=(11, 5.4), subplot_kw={"aspect": "equal"})
+        for ax, data, title, col in [
+            (axes[0], c, "ClassicPopulation", "#d1495b"),
+            (axes[1], s, "SoftStochastic", "#2a9d8f"),
+        ]:
+            if len(data):
+                ax.scatter(data[:, 0], data[:, 1], s=10, c=col, alpha=0.6, edgecolors="none")
+            ax.set_title(title)
+        fig.suptitle(f"{name} — final population spread")
+        fig.tight_layout()
+        fig.savefig(f"charts/bench/{name}_scatter.png")
+        plt.close(fig)
+    print("wrote charts/bench/*_scatter.png")
