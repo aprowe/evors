@@ -190,7 +190,7 @@ if os.path.isdir("data/bench"):
         plt.close(fig)
     print("wrote charts/bench/*_convergence.png")
 
-    # Coverage bars from results.csv (classic vs ssea max per problem).
+    # Coverage bars from results.csv (best config per strategy, per problem).
     if os.path.exists("data/bench/results.csv"):
         with open("data/bench/results.csv") as f:
             rows = list(csv.DictReader(f))
@@ -201,13 +201,15 @@ if os.path.isdir("data/bench"):
             return max(vals) if vals else 0.0
         classic = [best_cov(p, "classic") for p in probs]
         ssea = [best_cov(p, "ssea") for p in probs]
+        de = [best_cov(p, "de") for p in probs]
         x = np.arange(len(probs))
-        fig, ax = plt.subplots(figsize=(11, 5))
-        ax.bar(x - 0.2, classic, 0.4, label="ClassicPopulation", color="#d1495b")
-        ax.bar(x + 0.2, ssea, 0.4, label="SoftStochastic", color="#2a9d8f")
+        fig, ax = plt.subplots(figsize=(12, 5))
+        ax.bar(x - 0.27, classic, 0.27, label="ClassicPopulation", color="#d1495b")
+        ax.bar(x, de, 0.27, label="Differential Evolution", color="#e9c46a")
+        ax.bar(x + 0.27, ssea, 0.27, label="SoftStochastic (SSEA)", color="#2a9d8f")
         ax.set_xticks(x); ax.set_xticklabels(probs, rotation=30, ha="right")
         ax.set_ylabel("basins covered (mean)")
-        ax.set_title("Basin coverage — Classic vs SSEA")
+        ax.set_title("Basin coverage by strategy (SSEA finds all optima; DE/Classic converge to one)")
         ax.legend()
         fig.tight_layout()
         fig.savefig("charts/bench/coverage.png")
