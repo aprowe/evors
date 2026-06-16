@@ -226,8 +226,13 @@ pub fn default_configs() -> Vec<Config> {
         v.push(Config {
             label: format!("speciated(target={target},nw={nw},loc={loc})"),
             strat: Strat::Speciated(SpeciatedSoftStochasticInfo {
-                target, novelty_weight: nw, temperature: 0.2, behavior_weight: 0.0,
-                knn: 5, seed: 0, mate_locality: loc,
+                target,
+                novelty_weight: nw,
+                temperature: 0.2,
+                behavior_weight: 0.0,
+                knn: 5,
+                seed: 0,
+                mate_locality: loc,
             }),
             mutation_step: 0.3,
         });

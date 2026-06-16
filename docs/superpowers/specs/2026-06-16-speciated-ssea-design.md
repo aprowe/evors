@@ -114,11 +114,29 @@ Boltzmann weights (no distance bias).
   band marked.
 - The existing coverage bar chart gains a speciated series.
 
+## Implementation note — mating alone was insufficient
+
+The two-circles experiment showed that **assortative mating alone barely thins the
+dead zone** (between-fraction ~0.16 for both SSEA and speciated, sometimes worse):
+SSEA's cull *rewards novelty*, and the empty space between basins is the most
+novel region, so novelty-driven survival keeps refilling it regardless of who
+breeds with whom. The speciated cull therefore also **gates novelty by fitness**:
+
+```
+combined = fitness · (1 − w + w · novelty)        // was (1−w)·fitness + w·novelty
+```
+
+so a novel-but-low-fitness explorer in the dead zone has near-zero survival, while
+diversity is preserved *among good solutions*. With this, between-fraction drops to
+~0.10 (vs SSEA's ~0.17) and species cluster cleanly on the two rings. Across the
+gauntlet, speciated keeps strong coverage of the *good* basins (rastrigin ~24,
+griewank ~58) — close to SSEA and far above DE/Classic — trading SSEA's coverage of
+marginal basins for tighter, less-scattered clusters.
+
 ## Scope / non-goals
 
-- Only crossover mating is distance-biased; the cull stays soft/novelty-based
-  (the user's hypothesis is that assortative mating alone thins the between-basin
-  population — the two-circles test verifies it).
+- Two changes vs SSEA: distance-biased crossover mating **and** fitness-gated
+  novelty in the cull (the experiment above showed both are needed).
 - No species IDs, counts, or explicit fitness sharing.
 - Deliberate code duplication of the SSEA core to keep the tuned `SoftStochastic`
   untouched; a future DRY refactor (shared cull/novelty module) is out of scope.

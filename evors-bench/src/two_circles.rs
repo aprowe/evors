@@ -31,7 +31,11 @@ pub fn between_fraction(pool: &[Vec<f64>]) -> f64 {
 pub fn covers_both(pool: &[Vec<f64>]) -> bool {
     let on = |left: bool| {
         pool.iter().any(|x| {
-            let near = if left { x[0] < -(C - 1.5) } else { x[0] > C - 1.5 };
+            let near = if left {
+                x[0] < -(C - 1.5)
+            } else {
+                x[0] > C - 1.5
+            };
             near && -objective(x) > 0.9
         })
     };

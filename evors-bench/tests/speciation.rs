@@ -15,12 +15,21 @@ fn fitness(x: &Vec<f64>) -> f64 {
 #[test]
 fn speciation_reduces_between_population() {
     let budget = 30_000;
-    let cfg = || RunConfig { stop: Stop::Trials(budget), batch_size: 1, max_trials: None };
+    let cfg = || RunConfig {
+        stop: Stop::Trials(budget),
+        batch_size: 1,
+        max_trials: None,
+    };
 
     let mut ssea = SoftStochastic::new(
         VecGenetics::new(bounds(), 0.3),
         SoftStochasticInfo {
-            target: 300, novelty_weight: 0.6, temperature: 0.2, behavior_weight: 0.0, knn: 5, seed: 1,
+            target: 300,
+            novelty_weight: 0.6,
+            temperature: 0.2,
+            behavior_weight: 0.0,
+            knn: 5,
+            seed: 1,
         },
     );
     let _ = run(&cfg(), &mut ssea, fitness);
@@ -29,14 +38,22 @@ fn speciation_reduces_between_population() {
     let mut spec = SpeciatedSoftStochastic::new(
         VecGenetics::new(bounds(), 0.3),
         SpeciatedSoftStochasticInfo {
-            target: 300, novelty_weight: 0.6, temperature: 0.2, behavior_weight: 0.0, knn: 5, seed: 1,
+            target: 300,
+            novelty_weight: 0.6,
+            temperature: 0.2,
+            behavior_weight: 0.0,
+            knn: 5,
+            seed: 1,
             mate_locality: 5.0,
         },
     );
     let _ = run(&cfg(), &mut spec, fitness);
     let spec_pool = spec.members();
 
-    assert!(covers_both(&ssea_pool), "plain SSEA should cover both rings");
+    assert!(
+        covers_both(&ssea_pool),
+        "plain SSEA should cover both rings"
+    );
     assert!(covers_both(&spec_pool), "speciated should cover both rings");
 
     let bf_ssea = between_fraction(&ssea_pool);
@@ -56,7 +73,12 @@ fn speciated_solves_sphere() {
     let cfg = Config {
         label: "speciated".into(),
         strat: Strat::Speciated(SpeciatedSoftStochasticInfo {
-            target: 100, novelty_weight: 0.2, temperature: 0.1, behavior_weight: 0.0, knn: 5, seed: 0,
+            target: 100,
+            novelty_weight: 0.2,
+            temperature: 0.1,
+            behavior_weight: 0.0,
+            knn: 5,
+            seed: 0,
             mate_locality: 2.0,
         }),
         mutation_step: 0.3,

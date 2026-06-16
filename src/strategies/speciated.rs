@@ -305,7 +305,12 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> SpeciatedSoftStochastic<X, S> {
             } else {
                 gnorm
             };
-            let combined = ((1.0 - w) * nf + w * nn).clamp(0.0, 1.0);
+            // Fitness-GATED novelty: novelty only helps survival in proportion
+            // to fitness, so isolated low-fitness "explorers" in the dead zone
+            // between basins are culled while diversity is preserved *among good
+            // solutions*. This is what makes soft species cluster on the optima
+            // rather than smear through the empty space between them.
+            let combined = (nf * (1.0 - w + w * nn)).clamp(0.0, 1.0);
             let p_survive = combined.powf(pressure).clamp(0.0, 1.0);
             if self.rng.random_bool(p_survive) {
                 survivors.push(m);
@@ -315,7 +320,9 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> SpeciatedSoftStochastic<X, S> {
     }
 }
 
-impl<X: Genetic, S: Fitness + Behavior + Clone> EvolutionStrategy for SpeciatedSoftStochastic<X, S> {
+impl<X: Genetic, S: Fitness + Behavior + Clone> EvolutionStrategy
+    for SpeciatedSoftStochastic<X, S>
+{
     type Genetic = X;
     type Score = S;
 
@@ -386,24 +393,41 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> EvolutionStrategy for SpeciatedS
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::trial::{run, RunConfig, Stop};
+    use crate::trial::{RunConfig, Stop, run};
 
     struct UnitGenetics;
     impl Genetic for UnitGenetics {
         type Genome = f64;
-        fn random(&self, rng: &mut impl Rng) -> f64 { rng.random::<f64>() }
-        fn cross(&self, a: &f64, b: &f64, _r: &mut impl Rng) -> f64 { (a + b) / 2.0 }
-        fn mutate(&self, g: &f64, rng: &mut impl Rng) -> f64 { (g + rng.random_range(-0.05..0.05)).clamp(0.0, 1.0) }
-        fn gene_dist(&self, a: &f64, b: &f64) -> f64 { (a - b).abs() }
+        fn random(&self, rng: &mut impl Rng) -> f64 {
+            rng.random::<f64>()
+        }
+        fn cross(&self, a: &f64, b: &f64, _r: &mut impl Rng) -> f64 {
+            (a + b) / 2.0
+        }
+        fn mutate(&self, g: &f64, rng: &mut impl Rng) -> f64 {
+            (g + rng.random_range(-0.05..0.05)).clamp(0.0, 1.0)
+        }
+        fn gene_dist(&self, a: &f64, b: &f64) -> f64 {
+            (a - b).abs()
+        }
     }
 
     #[test]
     fn speciated_pool_grows_and_improves() {
         let mut strat: SpeciatedSoftStochastic<UnitGenetics, f64> = SpeciatedSoftStochastic::new(
             UnitGenetics,
-            SpeciatedSoftStochasticInfo { target: 20, seed: 5, mate_locality: 2.0, ..Default::default() },
+            SpeciatedSoftStochasticInfo {
+                target: 20,
+                seed: 5,
+                mate_locality: 2.0,
+                ..Default::default()
+            },
         );
-        let cfg = RunConfig { stop: Stop::Trials(300), batch_size: 1, max_trials: None };
+        let cfg = RunConfig {
+            stop: Stop::Trials(300),
+            batch_size: 1,
+            max_trials: None,
+        };
         let out = run(&cfg, &mut strat, |x: &f64| *x);
         assert!(out.best_score.unwrap() > 0.8, "got {:?}", out.best_score);
     }
