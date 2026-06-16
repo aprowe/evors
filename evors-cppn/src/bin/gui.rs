@@ -134,7 +134,9 @@ struct Champion {
 /// Decode a `DynamicImage` into a `res × res` RGB target, row 0 = bottom (the
 /// eval / GL convention).
 fn decode_rgb(img: image::DynamicImage, res: u32) -> Vec<f32> {
-    let img = img.resize_exact(res, res, image::imageops::FilterType::Triangle).to_rgb8();
+    let img = img
+        .resize_exact(res, res, image::imageops::FilterType::Triangle)
+        .to_rgb8();
     let mut out = vec![0.0f32; (res * res * 3) as usize];
     for y in 0..res {
         let src_y = res - 1 - y; // flip top-down -> bottom-up
@@ -151,7 +153,10 @@ fn decode_rgb(img: image::DynamicImage, res: u32) -> Vec<f32> {
 
 /// The bundled sunset, used as the startup target.
 fn load_sunset(res: u32) -> Vec<f32> {
-    decode_rgb(image::load_from_memory(include_bytes!("../../assets/sunset.jpg")).expect("sunset"), res)
+    decode_rgb(
+        image::load_from_memory(include_bytes!("../../assets/sunset.jpg")).expect("sunset"),
+        res,
+    )
 }
 
 /// Load an image file chosen by the user. `None` if it can't be decoded.
@@ -397,7 +402,9 @@ impl App {
         self.strategy.set_behavior_weight(self.behavior_weight);
         self.strategy.set_temperature(self.temperature);
         self.strategy.genetics_mut().set_add_node_prob(self.growth);
-        self.strategy.genetics_mut().set_weight_strength(self.weight);
+        self.strategy
+            .genetics_mut()
+            .set_weight_strength(self.weight);
         for _ in 0..BATCH {
             let genome = self.strategy.next();
             let render = gpu.eval.render_rgb(&gpu.gl, &genome);
@@ -442,7 +449,9 @@ impl App {
                 .map(|g| g.hidden_count())
                 .unwrap_or(0),
         );
-        let pool_hidden = self.strategy.pool_fold(0usize, |m, g| m.max(g.hidden_count()));
+        let pool_hidden = self
+            .strategy
+            .pool_fold(0usize, |m, g| m.max(g.hidden_count()));
         let mut panel_w = 0.0f32;
         let gpu = self.gpu.as_mut().unwrap();
         // Lazily build the static target thumbnail texture.

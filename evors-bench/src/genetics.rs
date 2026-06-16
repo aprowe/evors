@@ -13,7 +13,10 @@ pub struct VecGenetics {
 
 impl VecGenetics {
     pub fn new(bounds: Vec<(f64, f64)>, step: f64) -> Self {
-        Self { bounds, step: step.max(1e-9) }
+        Self {
+            bounds,
+            step: step.max(1e-9),
+        }
     }
 }
 
@@ -21,11 +24,17 @@ impl Genetic for VecGenetics {
     type Genome = Vec<f64>;
 
     fn random(&self, rng: &mut impl Rng) -> Vec<f64> {
-        self.bounds.iter().map(|(lo, hi)| rng.random_range(*lo..*hi)).collect()
+        self.bounds
+            .iter()
+            .map(|(lo, hi)| rng.random_range(*lo..*hi))
+            .collect()
     }
 
     fn cross(&self, a: &Vec<f64>, b: &Vec<f64>, rng: &mut impl Rng) -> Vec<f64> {
-        a.iter().zip(b).map(|(x, y)| if rng.random_bool(0.5) { *x } else { *y }).collect()
+        a.iter()
+            .zip(b)
+            .map(|(x, y)| if rng.random_bool(0.5) { *x } else { *y })
+            .collect()
     }
 
     fn mutate(&self, g: &Vec<f64>, rng: &mut impl Rng) -> Vec<f64> {
@@ -36,7 +45,11 @@ impl Genetic for VecGenetics {
     }
 
     fn gene_dist(&self, a: &Vec<f64>, b: &Vec<f64>) -> f64 {
-        a.iter().zip(b).map(|(x, y)| (x - y).powi(2)).sum::<f64>().sqrt()
+        a.iter()
+            .zip(b)
+            .map(|(x, y)| (x - y).powi(2))
+            .sum::<f64>()
+            .sqrt()
     }
 }
 

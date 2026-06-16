@@ -9,7 +9,7 @@ use evors::strategies::{
     ClassicPopulation, ClassicPopulationInfo, SoftStochastic, SoftStochasticInfo,
 };
 use evors::strategy::EvolutionStrategy;
-use evors::{run_observed, RecordingObserver, RunConfig, Stop};
+use evors::{RecordingObserver, RunConfig, Stop, run_observed};
 
 /// The result of one (problem, config, seed) run.
 pub struct RunResult {
@@ -41,7 +41,11 @@ where
     St: EvolutionStrategy<Score = f64> + PopulationView<Genome = Vec<f64>>,
     St::Genetic: Genetic<Genome = Vec<f64>>,
 {
-    let cfg = RunConfig { stop: Stop::Trials(budget), batch_size: 1, max_trials: None };
+    let cfg = RunConfig {
+        stop: Stop::Trials(budget),
+        batch_size: 1,
+        max_trials: None,
+    };
     let mut rec = RecordingObserver::new();
     let objective = p.objective;
     let out = run_observed(&cfg, strat, move |x: &Vec<f64>| -objective(x), &mut rec);
@@ -50,7 +54,12 @@ where
     let convergence: Vec<f64> = rec.best_fitness.iter().map(|f| -f).collect();
     let best_value = out.best_score.map(|f| -f).unwrap_or(f64::INFINITY);
     let best_x = out.best_genome.unwrap_or_default();
-    RunResult { convergence, final_pool: strat.members(), best_x, best_value }
+    RunResult {
+        convergence,
+        final_pool: strat.members(),
+        best_x,
+        best_value,
+    }
 }
 
 /// Run a config on a problem at a given seed.
@@ -91,7 +100,9 @@ pub fn succeeded(p: &Problem, r: &RunResult) -> bool {
 
 /// First eval index reaching within `value_eps` of the optimum (`None` if never).
 pub fn evals_to_target(p: &Problem, r: &RunResult) -> Option<usize> {
-    r.convergence.iter().position(|v| v - p.global_min < p.value_eps)
+    r.convergence
+        .iter()
+        .position(|v| v - p.global_min < p.value_eps)
 }
 
 /// Distinct local minima with at least one final-pool member within `basin_eps`.
@@ -100,7 +111,12 @@ pub fn coverage(p: &Problem, r: &RunResult) -> usize {
         .iter()
         .filter(|m| {
             r.final_pool.iter().any(|x| {
-                x.iter().zip(m.iter()).map(|(a, b)| (a - b).powi(2)).sum::<f64>().sqrt() < p.basin_eps
+                x.iter()
+                    .zip(m.iter())
+                    .map(|(a, b)| (a - b).powi(2))
+                    .sum::<f64>()
+                    .sqrt()
+                    < p.basin_eps
             })
         })
         .count()
@@ -154,7 +170,11 @@ pub fn summarize(p: &Problem, cfg: &Config, budget: usize, seeds: u64) -> Summar
         median_evals,
         mean_coverage,
         mean_convergence,
-        sample_pool: runs.into_iter().next().map(|r| r.final_pool).unwrap_or_default(),
+        sample_pool: runs
+            .into_iter()
+            .next()
+            .map(|r| r.final_pool)
+            .unwrap_or_default(),
     }
 }
 
@@ -165,17 +185,28 @@ pub fn default_configs() -> Vec<Config> {
         v.push(Config {
             label: format!("classic(pop={pop},t={tour},mr={mr})"),
             strat: Strat::Classic(ClassicPopulationInfo {
-                pop_size: pop, tournament: tour, mutation_rate: mr, seed: 0,
+                pop_size: pop,
+                tournament: tour,
+                mutation_rate: mr,
+                seed: 0,
             }),
             mutation_step: 0.3,
         });
     }
-    for &(target, nw, temp) in &[(150usize, 0.2f64, 0.1f64), (200, 0.5, 0.15), (300, 0.7, 0.2)] {
+    for &(target, nw, temp) in &[
+        (150usize, 0.2f64, 0.1f64),
+        (200, 0.5, 0.15),
+        (300, 0.7, 0.2),
+    ] {
         v.push(Config {
             label: format!("ssea(target={target},nw={nw},T={temp})"),
             strat: Strat::Ssea(SoftStochasticInfo {
-                target, novelty_weight: nw, temperature: temp, behavior_weight: 0.0,
-                knn: 5, seed: 0,
+                target,
+                novelty_weight: nw,
+                temperature: temp,
+                behavior_weight: 0.0,
+                knn: 5,
+                seed: 0,
             }),
             mutation_step: 0.3,
         });
@@ -183,7 +214,12 @@ pub fn default_configs() -> Vec<Config> {
     for &(pop, f, cr) in &[(60usize, 0.6f64, 0.9f64), (100, 0.5, 0.9)] {
         v.push(Config {
             label: format!("de(pop={pop},F={f},CR={cr})"),
-            strat: Strat::De(DeInfo { pop, f, cr, seed: 0 }),
+            strat: Strat::De(DeInfo {
+                pop,
+                f,
+                cr,
+                seed: 0,
+            }),
             mutation_step: 0.0,
         });
     }
@@ -205,12 +241,19 @@ mod tests {
         let cfg = Config {
             label: "ssea".into(),
             strat: Strat::Ssea(SoftStochasticInfo {
-                target: 80, novelty_weight: 0.2, ..Default::default()
+                target: 80,
+                novelty_weight: 0.2,
+                ..Default::default()
             }),
             mutation_step: 0.3,
         };
         let r = run_config(&p, &cfg, 6000, 7);
-        assert!(succeeded(&p, &r), "error {} not < {}", error(&p, &r), p.value_eps);
+        assert!(
+            succeeded(&p, &r),
+            "error {} not < {}",
+            error(&p, &r),
+            p.value_eps
+        );
         assert!(coverage(&p, &r) >= 1);
     }
 }

@@ -11,4 +11,4 @@ pub use genetic::Genetic;
 pub use observe::{CsvProgressObserver, NoObserver, Observer, Progress, RecordingObserver};
 pub use population::PopulationView;
 pub use strategy::{Behavior, EvolutionStrategy, Fitness};
-pub use trial::{run, run_observed, Outcome, RunConfig, Stop};
+pub use trial::{Outcome, RunConfig, Stop, run, run_observed};

@@ -123,7 +123,12 @@ where
         Some((g, s)) => (Some(g.clone()), Some(s.clone())),
         None => (None, None),
     };
-    Outcome { best_genome, best_score, generations, trials }
+    Outcome {
+        best_genome,
+        best_score,
+        generations,
+        trials,
+    }
 }
 
 /// Drive a self-contained strategy against `fitness` until `cfg.stop`.

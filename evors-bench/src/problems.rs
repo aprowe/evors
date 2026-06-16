@@ -29,7 +29,9 @@ fn rosenbrock(x: &[f64]) -> f64 {
 }
 fn rastrigin(x: &[f64]) -> f64 {
     10.0 * x.len() as f64
-        + x.iter().map(|v| v * v - 10.0 * (2.0 * PI * v).cos()).sum::<f64>()
+        + x.iter()
+            .map(|v| v * v - 10.0 * (2.0 * PI * v).cos())
+            .sum::<f64>()
 }
 fn eggcrate(x: &[f64]) -> f64 {
     let (a, b) = (x[0], x[1]);
@@ -43,12 +45,15 @@ fn ackley(x: &[f64]) -> f64 {
 }
 fn griewank(x: &[f64]) -> f64 {
     let s = x.iter().map(|v| v * v).sum::<f64>() / 4000.0;
-    let p: f64 = x.iter().enumerate().map(|(i, v)| (v / ((i + 1) as f64).sqrt()).cos()).product();
+    let p: f64 = x
+        .iter()
+        .enumerate()
+        .map(|(i, v)| (v / ((i + 1) as f64).sqrt()).cos())
+        .product();
     s - p + 1.0
 }
 fn schwefel(x: &[f64]) -> f64 {
-    418.982_887_272_433_8 * x.len() as f64
-        - x.iter().map(|v| v * v.abs().sqrt().sin()).sum::<f64>()
+    418.982_887_272_433_8 * x.len() as f64 - x.iter().map(|v| v * v.abs().sqrt().sin()).sum::<f64>()
 }
 fn dropwave(x: &[f64]) -> f64 {
     let r2 = x[0] * x[0] + x[1] * x[1];
@@ -111,38 +116,121 @@ pub fn all() -> Vec<Problem> {
         vec![-1.349406, -1.349406],
     ];
     vec![
-        Problem { name: "sphere", dim: 2, bounds: b2(-5.0, 5.0), objective: sphere,
-            global_min: 0.0, optima: vec![vec![0.0, 0.0]], local_minima: vec![vec![0.0, 0.0]],
-            value_eps: 1e-3, basin_eps: 0.3 },
-        Problem { name: "rosenbrock", dim: 2, bounds: b2(-2.0, 2.0), objective: rosenbrock,
-            global_min: 0.0, optima: vec![vec![1.0, 1.0]], local_minima: vec![vec![1.0, 1.0]],
-            value_eps: 1e-2, basin_eps: 0.2 },
-        Problem { name: "rastrigin", dim: 2, bounds: b2(-5.12, 5.12), objective: rastrigin,
-            global_min: 0.0, optima: vec![vec![0.0, 0.0]], local_minima: int_grid(-5.0, 5.0),
-            value_eps: 1e-2, basin_eps: 0.3 },
-        Problem { name: "eggcrate", dim: 2, bounds: b2(-5.0, 5.0), objective: eggcrate,
-            global_min: 0.0, optima: vec![vec![0.0, 0.0]], local_minima: pi_grid(-5.0, 5.0),
-            value_eps: 1e-2, basin_eps: 0.5 },
-        Problem { name: "ackley", dim: 2, bounds: b2(-5.0, 5.0), objective: ackley,
-            global_min: 0.0, optima: vec![vec![0.0, 0.0]], local_minima: int_grid(-4.0, 4.0),
-            value_eps: 1e-2, basin_eps: 0.3 },
-        Problem { name: "griewank", dim: 2, bounds: b2(-10.0, 10.0), objective: griewank,
-            global_min: 0.0, optima: vec![vec![0.0, 0.0]], local_minima: int_grid(-9.0, 9.0),
-            value_eps: 1e-2, basin_eps: 0.5 },
-        Problem { name: "schwefel", dim: 2, bounds: b2(-500.0, 500.0), objective: schwefel,
-            global_min: 0.0, optima: vec![vec![420.9687, 420.9687]],
-            local_minima: vec![vec![420.9687, 420.9687], vec![420.9687, -302.5249],
-                vec![-302.5249, 420.9687], vec![-302.5249, -302.5249]],
-            value_eps: 1.0, basin_eps: 20.0 },
-        Problem { name: "dropwave", dim: 2, bounds: b2(-5.12, 5.12), objective: dropwave,
-            global_min: -1.0, optima: vec![vec![0.0, 0.0]], local_minima: vec![vec![0.0, 0.0]],
-            value_eps: 1e-2, basin_eps: 0.3 },
-        Problem { name: "himmelblau", dim: 2, bounds: b2(-5.0, 5.0), objective: himmelblau,
-            global_min: 0.0, optima: himmel.clone(), local_minima: himmel,
-            value_eps: 1e-2, basin_eps: 0.4 },
-        Problem { name: "cross_in_tray", dim: 2, bounds: b2(-10.0, 10.0), objective: cross_in_tray,
-            global_min: -2.062612, optima: cross.clone(), local_minima: cross,
-            value_eps: 1e-2, basin_eps: 0.4 },
+        Problem {
+            name: "sphere",
+            dim: 2,
+            bounds: b2(-5.0, 5.0),
+            objective: sphere,
+            global_min: 0.0,
+            optima: vec![vec![0.0, 0.0]],
+            local_minima: vec![vec![0.0, 0.0]],
+            value_eps: 1e-3,
+            basin_eps: 0.3,
+        },
+        Problem {
+            name: "rosenbrock",
+            dim: 2,
+            bounds: b2(-2.0, 2.0),
+            objective: rosenbrock,
+            global_min: 0.0,
+            optima: vec![vec![1.0, 1.0]],
+            local_minima: vec![vec![1.0, 1.0]],
+            value_eps: 1e-2,
+            basin_eps: 0.2,
+        },
+        Problem {
+            name: "rastrigin",
+            dim: 2,
+            bounds: b2(-5.12, 5.12),
+            objective: rastrigin,
+            global_min: 0.0,
+            optima: vec![vec![0.0, 0.0]],
+            local_minima: int_grid(-5.0, 5.0),
+            value_eps: 1e-2,
+            basin_eps: 0.3,
+        },
+        Problem {
+            name: "eggcrate",
+            dim: 2,
+            bounds: b2(-5.0, 5.0),
+            objective: eggcrate,
+            global_min: 0.0,
+            optima: vec![vec![0.0, 0.0]],
+            local_minima: pi_grid(-5.0, 5.0),
+            value_eps: 1e-2,
+            basin_eps: 0.5,
+        },
+        Problem {
+            name: "ackley",
+            dim: 2,
+            bounds: b2(-5.0, 5.0),
+            objective: ackley,
+            global_min: 0.0,
+            optima: vec![vec![0.0, 0.0]],
+            local_minima: int_grid(-4.0, 4.0),
+            value_eps: 1e-2,
+            basin_eps: 0.3,
+        },
+        Problem {
+            name: "griewank",
+            dim: 2,
+            bounds: b2(-10.0, 10.0),
+            objective: griewank,
+            global_min: 0.0,
+            optima: vec![vec![0.0, 0.0]],
+            local_minima: int_grid(-9.0, 9.0),
+            value_eps: 1e-2,
+            basin_eps: 0.5,
+        },
+        Problem {
+            name: "schwefel",
+            dim: 2,
+            bounds: b2(-500.0, 500.0),
+            objective: schwefel,
+            global_min: 0.0,
+            optima: vec![vec![420.9687, 420.9687]],
+            local_minima: vec![
+                vec![420.9687, 420.9687],
+                vec![420.9687, -302.5249],
+                vec![-302.5249, 420.9687],
+                vec![-302.5249, -302.5249],
+            ],
+            value_eps: 1.0,
+            basin_eps: 20.0,
+        },
+        Problem {
+            name: "dropwave",
+            dim: 2,
+            bounds: b2(-5.12, 5.12),
+            objective: dropwave,
+            global_min: -1.0,
+            optima: vec![vec![0.0, 0.0]],
+            local_minima: vec![vec![0.0, 0.0]],
+            value_eps: 1e-2,
+            basin_eps: 0.3,
+        },
+        Problem {
+            name: "himmelblau",
+            dim: 2,
+            bounds: b2(-5.0, 5.0),
+            objective: himmelblau,
+            global_min: 0.0,
+            optima: himmel.clone(),
+            local_minima: himmel,
+            value_eps: 1e-2,
+            basin_eps: 0.4,
+        },
+        Problem {
+            name: "cross_in_tray",
+            dim: 2,
+            bounds: b2(-10.0, 10.0),
+            objective: cross_in_tray,
+            global_min: -2.062612,
+            optima: cross.clone(),
+            local_minima: cross,
+            value_eps: 1e-2,
+            basin_eps: 0.4,
+        },
     ]
 }
 
@@ -158,7 +246,10 @@ mod tests {
                 assert!(
                     (v - p.global_min).abs() < p.value_eps.max(1e-2),
                     "{}: objective({:?}) = {} != global_min {}",
-                    p.name, opt, v, p.global_min
+                    p.name,
+                    opt,
+                    v,
+                    p.global_min
                 );
             }
         }
@@ -169,7 +260,12 @@ mod tests {
         for p in all() {
             for m in &p.local_minima {
                 for (v, (lo, hi)) in m.iter().zip(&p.bounds) {
-                    assert!(*v >= *lo - 1e-9 && *v <= *hi + 1e-9, "{}: {:?} out of bounds", p.name, m);
+                    assert!(
+                        *v >= *lo - 1e-9 && *v <= *hi + 1e-9,
+                        "{}: {:?} out of bounds",
+                        p.name,
+                        m
+                    );
                 }
             }
         }

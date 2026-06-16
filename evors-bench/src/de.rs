@@ -20,7 +20,12 @@ pub struct DeInfo {
 
 impl Default for DeInfo {
     fn default() -> Self {
-        Self { pop: 60, f: 0.6, cr: 0.9, seed: 0 }
+        Self {
+            pop: 60,
+            f: 0.6,
+            cr: 0.9,
+            seed: 0,
+        }
     }
 }
 
@@ -57,7 +62,10 @@ impl Differential {
     }
 
     fn rand_vec(&mut self) -> Vec<f64> {
-        self.bounds.iter().map(|(lo, hi)| self.rng.random_range(*lo..*hi)).collect()
+        self.bounds
+            .iter()
+            .map(|(lo, hi)| self.rng.random_range(*lo..*hi))
+            .collect()
     }
 
     /// Three distinct indices in `0..n`, all different from `exclude`.
@@ -111,12 +119,18 @@ impl EvolutionStrategy for Differential {
             self.best = Some((genome.clone(), score));
         }
         match self.pending_target {
-            None => self.pop.push(Indiv { x: genome, fit: score }),
+            None => self.pop.push(Indiv {
+                x: genome,
+                fit: score,
+            }),
             Some(i) => {
                 // Greedy selection (we maximize, score = -objective): keep the
                 // trial if it is no worse than the target it challenged.
                 if score >= self.pop[i].fit {
-                    self.pop[i] = Indiv { x: genome, fit: score };
+                    self.pop[i] = Indiv {
+                        x: genome,
+                        fit: score,
+                    };
                 }
                 self.cursor = (i + 1) % self.pop.len();
             }
@@ -139,7 +153,7 @@ impl PopulationView for Differential {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::harness::{run_config, succeeded, Config, Strat};
+    use crate::harness::{Config, Strat, run_config, succeeded};
     use crate::problems::all;
 
     #[test]
@@ -147,7 +161,12 @@ mod tests {
         let p = all().into_iter().find(|p| p.name == "sphere").unwrap();
         let cfg = Config {
             label: "de".into(),
-            strat: Strat::De(DeInfo { pop: 60, f: 0.6, cr: 0.9, seed: 0 }),
+            strat: Strat::De(DeInfo {
+                pop: 60,
+                f: 0.6,
+                cr: 0.9,
+                seed: 0,
+            }),
             mutation_step: 0.0,
         };
         let r = run_config(&p, &cfg, 6000, 1);

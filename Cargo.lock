@@ -849,6 +849,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "evors-bench"
+version = "0.1.0"
+dependencies = [
+ "evors",
+ "rand",
+ "rand_chacha",
+]
+
+[[package]]
 name = "evors-cppn"
 version = "0.1.0"
 dependencies = [

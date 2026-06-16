@@ -7,4 +7,4 @@ pub mod problems;
 
 pub use de::{DeInfo, Differential};
 pub use genetics::VecGenetics;
-pub use problems::{all, Problem};
+pub use problems::{Problem, all};

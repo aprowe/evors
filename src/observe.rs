@@ -38,7 +38,11 @@ pub struct RecordingObserver {
 
 impl RecordingObserver {
     pub fn new() -> Self {
-        Self { best_fitness: Vec::new(), cur_best: f64::MIN, started: false }
+        Self {
+            best_fitness: Vec::new(),
+            cur_best: f64::MIN,
+            started: false,
+        }
     }
 }
 
@@ -63,7 +67,11 @@ pub struct CsvProgressObserver<W> {
 
 impl<W: Write> CsvProgressObserver<W> {
     pub fn new(w: W) -> Self {
-        Self { w, header: false, cur_best: f64::MIN }
+        Self {
+            w,
+            header: false,
+            cur_best: f64::MIN,
+        }
     }
 }
 
@@ -86,25 +94,41 @@ mod tests {
     use super::*;
     use crate::genetic::Genetic;
     use crate::strategies::{SoftStochastic, SoftStochasticInfo};
-    use crate::trial::{run_observed, RunConfig, Stop};
+    use crate::trial::{RunConfig, Stop, run_observed};
     use rand::Rng;
 
     struct UnitGenetics;
     impl Genetic for UnitGenetics {
         type Genome = f64;
-        fn random(&self, rng: &mut impl Rng) -> f64 { rng.random::<f64>() }
-        fn cross(&self, a: &f64, b: &f64, _r: &mut impl Rng) -> f64 { (a + b) / 2.0 }
-        fn mutate(&self, g: &f64, rng: &mut impl Rng) -> f64 { (g + rng.random_range(-0.05..0.05)).clamp(0.0, 1.0) }
-        fn gene_dist(&self, a: &f64, b: &f64) -> f64 { (a - b).abs() }
+        fn random(&self, rng: &mut impl Rng) -> f64 {
+            rng.random::<f64>()
+        }
+        fn cross(&self, a: &f64, b: &f64, _r: &mut impl Rng) -> f64 {
+            (a + b) / 2.0
+        }
+        fn mutate(&self, g: &f64, rng: &mut impl Rng) -> f64 {
+            (g + rng.random_range(-0.05..0.05)).clamp(0.0, 1.0)
+        }
+        fn gene_dist(&self, a: &f64, b: &f64) -> f64 {
+            (a - b).abs()
+        }
     }
 
     #[test]
     fn recording_observer_tracks_monotone_best() {
         let mut strat: SoftStochastic<UnitGenetics, f64> = SoftStochastic::new(
             UnitGenetics,
-            SoftStochasticInfo { target: 20, seed: 1, ..Default::default() },
+            SoftStochasticInfo {
+                target: 20,
+                seed: 1,
+                ..Default::default()
+            },
         );
-        let cfg = RunConfig { stop: Stop::Trials(300), batch_size: 1, max_trials: None };
+        let cfg = RunConfig {
+            stop: Stop::Trials(300),
+            batch_size: 1,
+            max_trials: None,
+        };
         let mut rec = RecordingObserver::new();
         let _ = run_observed(&cfg, &mut strat, |x: &f64| *x, &mut rec);
         assert_eq!(rec.best_fitness.len(), 300, "one record per eval");
