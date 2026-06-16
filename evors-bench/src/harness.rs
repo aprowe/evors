@@ -1,5 +1,6 @@
 //! Run a strategy on a problem and compute metrics.
 
+use crate::de::{DeInfo, Differential};
 use crate::genetics::VecGenetics;
 use crate::problems::Problem;
 use evors::genetic::Genetic;
@@ -24,6 +25,7 @@ pub struct RunResult {
 pub enum Strat {
     Classic(ClassicPopulationInfo),
     Ssea(SoftStochasticInfo),
+    De(DeInfo),
 }
 
 /// A full config: a strategy spec, the genetics mutation step, and a label.
@@ -66,6 +68,12 @@ pub fn run_config(p: &Problem, cfg: &Config, budget: usize, seed: u64) -> RunRes
             let mut info = info.clone();
             info.seed = seed;
             let mut strat = SoftStochastic::new(genetics, info);
+            run_one(p, &mut strat, budget)
+        }
+        Strat::De(info) => {
+            let mut info = *info;
+            info.seed = seed;
+            let mut strat = Differential::new(p.bounds.clone(), info);
             run_one(p, &mut strat, budget)
         }
     }
@@ -170,6 +178,13 @@ pub fn default_configs() -> Vec<Config> {
                 knn: 5, seed: 0,
             }),
             mutation_step: 0.3,
+        });
+    }
+    for &(pop, f, cr) in &[(60usize, 0.6f64, 0.9f64), (100, 0.5, 0.9)] {
+        v.push(Config {
+            label: format!("de(pop={pop},F={f},CR={cr})"),
+            strat: Strat::De(DeInfo { pop, f, cr, seed: 0 }),
+            mutation_step: 0.0,
         });
     }
     v
