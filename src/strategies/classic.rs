@@ -4,6 +4,7 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 /// CreateInfo for `ClassicPopulation`.
+#[derive(Clone, Copy)]
 pub struct ClassicPopulationInfo {
     pub pop_size: usize,
     pub tournament: usize,

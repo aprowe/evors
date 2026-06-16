@@ -4,6 +4,7 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 /// CreateInfo for `SoftStochastic`.
+#[derive(Clone, Copy)]
 pub struct SoftStochasticInfo {
     pub target: usize,
     pub temperature: f64,
