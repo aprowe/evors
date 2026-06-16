@@ -19,6 +19,8 @@ log = "0.4"
 egui = "0.34"
 egui_glow = { version = "0.34", features = ["winit"] }
 egui-winit = "0.34"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "bmp", "gif", "webp"] }
+rfd = "0.15"
 
 [[bin]]
 name = "cppn-gui"

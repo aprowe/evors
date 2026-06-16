@@ -11,8 +11,8 @@ use egui_winit::winit;
 use evors::strategies::{SoftStochastic, SoftStochasticInfo};
 use evors::strategy::EvolutionStrategy;
 use evors_cppn::{
-    CppnGenetics, CppnParams, CppnRenderer, ImgScore, demo_target, downsample_rgb, encode,
-    fitness_of, pack_buffers,
+    CppnGenetics, CppnParams, CppnRenderer, ImgScore, downsample_rgb, encode, fitness_of,
+    pack_buffers,
 };
 use evors_neat::NeatGenome;
 use glow::HasContext as _;
@@ -48,7 +48,7 @@ impl GlutinWindowContext {
                 height: 640.0,
             })
             .with_title("evors-cppn")
-            .with_visible(false);
+            .with_visible(true);
         let config_template = glutin::config::ConfigTemplateBuilder::new()
             .prefer_hardware_accelerated(None)
             .with_depth_size(0)
@@ -129,6 +129,51 @@ struct Champion {
     conns: Vec<u32>,
     node_count: u32,
     out: [u32; 3],
+}
+
+/// Decode a `DynamicImage` into a `res × res` RGB target, row 0 = bottom (the
+/// eval / GL convention).
+fn decode_rgb(img: image::DynamicImage, res: u32) -> Vec<f32> {
+    let img = img.resize_exact(res, res, image::imageops::FilterType::Triangle).to_rgb8();
+    let mut out = vec![0.0f32; (res * res * 3) as usize];
+    for y in 0..res {
+        let src_y = res - 1 - y; // flip top-down -> bottom-up
+        for x in 0..res {
+            let p = img.get_pixel(x, src_y);
+            let i = ((y * res + x) * 3) as usize;
+            out[i] = p[0] as f32 / 255.0;
+            out[i + 1] = p[1] as f32 / 255.0;
+            out[i + 2] = p[2] as f32 / 255.0;
+        }
+    }
+    out
+}
+
+/// The bundled sunset, used as the startup target.
+fn load_sunset(res: u32) -> Vec<f32> {
+    decode_rgb(image::load_from_memory(include_bytes!("../../assets/sunset.jpg")).expect("sunset"), res)
+}
+
+/// Load an image file chosen by the user. `None` if it can't be decoded.
+fn load_image_file(path: &std::path::Path, res: u32) -> Option<Vec<f32>> {
+    image::open(path).ok().map(|img| decode_rgb(img, res))
+}
+
+/// Build a top-down egui thumbnail from a bottom-up RGB target.
+fn thumbnail(target: &[f32], res: u32) -> egui::ColorImage {
+    let res = res as usize;
+    let mut px = vec![0u8; res * res * 3];
+    for y in 0..res {
+        let src = res - 1 - y;
+        for x in 0..res {
+            let s = (src * res + x) * 3;
+            let d = (y * res + x) * 3;
+            for c in 0..3 {
+                px[d + c] = (target[s + c].clamp(0.0, 1.0) * 255.0) as u8;
+            }
+        }
+    }
+    egui::ColorImage::from_rgb([res, res], &px)
 }
 
 fn champion_of(g: &NeatGenome) -> Option<Champion> {
@@ -285,8 +330,11 @@ struct App {
     behavior_weight: f64,
     temperature: f64,
     target_pool: usize,
+    growth: f64, // live add-node mutation rate
+    weight: f64, // live weight strength (half-range)
     paused: bool,
     shown: bool,
+    target_tex: Option<egui::TextureHandle>,
 }
 
 fn new_strategy(
@@ -314,7 +362,7 @@ impl App {
         Self {
             gpu: None,
             strategy: new_strategy(pool, nw, bw, temp),
-            target: demo_target(RES),
+            target: load_sunset(RES),
             best_fitness: f64::MIN,
             best_genome: None,
             trials: 0,
@@ -323,8 +371,11 @@ impl App {
             behavior_weight: bw,
             temperature: temp,
             target_pool: pool,
+            growth: 0.10,
+            weight: 3.0,
             paused: false,
             shown: false,
+            target_tex: None,
         }
     }
 
@@ -345,6 +396,8 @@ impl App {
         self.strategy.set_novelty_weight(self.novelty_weight);
         self.strategy.set_behavior_weight(self.behavior_weight);
         self.strategy.set_temperature(self.temperature);
+        self.strategy.genetics_mut().set_add_node_prob(self.growth);
+        self.strategy.genetics_mut().set_weight_strength(self.weight);
         for _ in 0..BATCH {
             let genome = self.strategy.next();
             let render = gpu.eval.render_rgb(&gpu.gl, &genome);
@@ -377,6 +430,9 @@ impl App {
             self.paused,
         );
         let mut restart = false;
+        let mut pick_image = false;
+        let mut growth = self.growth;
+        let mut weight = self.weight;
         let (trials, fitness, psize, hidden) = (
             self.trials,
             self.best_fitness.max(0.0),
@@ -386,8 +442,19 @@ impl App {
                 .map(|g| g.hidden_count())
                 .unwrap_or(0),
         );
+        let pool_hidden = self.strategy.pool_fold(0usize, |m, g| m.max(g.hidden_count()));
         let mut panel_w = 0.0f32;
         let gpu = self.gpu.as_mut().unwrap();
+        // Lazily build the static target thumbnail texture.
+        if self.target_tex.is_none() {
+            let img = thumbnail(&self.target, RES);
+            self.target_tex = Some(gpu.egui.egui_ctx.load_texture(
+                "target",
+                img,
+                egui::TextureOptions::LINEAR,
+            ));
+        }
+        let thumb = self.target_tex.clone();
         let window_ptr = &gpu.win.window as *const winit::window::Window;
         gpu.egui.run(unsafe { &*window_ptr }, |ctx| {
             let resp = egui::SidePanel::left("controls")
@@ -396,15 +463,28 @@ impl App {
                     ui.heading("evors-cppn");
                     ui.label("CPPN image evolution (SSEA)");
                     ui.separator();
+                    ui.horizontal(|ui| {
+                        ui.label("target:");
+                        if ui.button("Choose image…").clicked() {
+                            pick_image = true;
+                        }
+                    });
+                    if let Some(t) = &thumb {
+                        ui.image((t.id(), egui::vec2(160.0, 160.0)));
+                    }
+                    ui.separator();
                     ui.label(format!("trials:  {trials}"));
                     ui.label(format!("fitness: {fitness:.4}"));
                     ui.label(format!("pool:    {psize}"));
-                    ui.label(format!("hidden:  {hidden}"));
+                    ui.label(format!("champion hidden: {hidden}"));
+                    ui.label(format!("pool hidden (max): {pool_hidden}"));
                     ui.separator();
                     ui.label("Convergence (live):");
                     ui.add(egui::Slider::new(&mut nw, 0.0..=1.0).text("novelty"));
                     ui.add(egui::Slider::new(&mut bw, 0.0..=1.0).text("solution vs gene"));
                     ui.add(egui::Slider::new(&mut temp, 0.01..=1.0).text("temperature"));
+                    ui.add(egui::Slider::new(&mut growth, 0.0..=0.4).text("topology growth"));
+                    ui.add(egui::Slider::new(&mut weight, 0.5..=10.0).text("weight strength"));
                     ui.add(egui::Slider::new(&mut sm, 0.01..=1.0).text("display smoothing"));
                     ui.separator();
                     ui.label("Pool size (applies on restart):");
@@ -426,15 +506,36 @@ impl App {
         self.temperature = temp;
         self.smoothing = sm;
         self.target_pool = pool;
+        self.growth = growth;
+        self.weight = weight;
         self.paused = paused;
         if restart {
             self.restart();
+        }
+        if pick_image {
+            if let Some(path) = rfd::FileDialog::new()
+                .add_filter("images", &["png", "jpg", "jpeg", "bmp", "gif", "webp"])
+                .pick_file()
+            {
+                if let Some(target) = load_image_file(&path, RES) {
+                    self.target = target;
+                    self.target_tex = None; // rebuild thumbnail
+                    self.restart(); // evolve toward the new image
+                }
+            }
         }
 
         // 2. Evolve a batch.
         if !self.paused {
             self.evolve();
         }
+
+        // The display tracks the *current pool best* (so it churns with novelty),
+        // falling back to the all-time champion before the pool fills.
+        let display_genome = self
+            .strategy
+            .pool_best_genome()
+            .or_else(|| self.best_genome.clone());
 
         // 3. Draw the CPPN canvas to the framebuffer, then egui on top.
         let gpu = self.gpu.as_mut().unwrap();
@@ -450,7 +551,7 @@ impl App {
             gpu.gl.clear_color(0.06, 0.06, 0.08, 1.0);
             gpu.gl.clear(glow::COLOR_BUFFER_BIT);
         }
-        if let Some(champ) = self.best_genome.as_ref().and_then(champion_of) {
+        if let Some(champ) = display_genome.as_ref().and_then(champion_of) {
             gpu.canvas.accumulate(&gpu.gl, &champ, self.smoothing);
             // Square, centered in the canvas region (right of the panel).
             let region_w = (win_w - panel_px).max(1);

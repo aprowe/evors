@@ -75,6 +75,21 @@ impl NeatGenetics {
         }
     }
 
+    /// Live tuning of the structural-mutation rates (e.g. from a GUI).
+    pub fn set_add_node_prob(&mut self, p: f64) {
+        self.params.add_node_prob = p.clamp(0.0, 1.0);
+    }
+    pub fn set_add_conn_prob(&mut self, p: f64) {
+        self.params.add_conn_prob = p.clamp(0.0, 1.0);
+    }
+    /// Half-range of weights for new/reset connections; the perturbation step is
+    /// scaled to 40% of it.
+    pub fn set_weight_strength(&mut self, s: f64) {
+        let s = s.max(1e-3);
+        self.params.weight_init_range = s;
+        self.params.weight_perturb = s * 0.4;
+    }
+
     fn bias_id(&self) -> u64 {
         self.inputs as u64
     }

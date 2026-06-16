@@ -17,6 +17,9 @@ impl Default for CppnParams {
     fn default() -> Self {
         let neat = NeatParams {
             add_node_prob: 0.04,
+            // CPPN patterns need bold weights, else everything is mid-gray gradients.
+            weight_init_range: 3.0,
+            weight_perturb: 1.2,
             activation_mutate_prob: 0.1,
             output_activation: Activation::Sigmoid,
             hidden_activations: vec![
@@ -50,6 +53,17 @@ impl CppnGenetics {
         Self {
             inner: NeatGenetics::new(3, 3, params.neat),
         }
+    }
+
+    /// Live tuning of structural growth (e.g. from a GUI).
+    pub fn set_add_node_prob(&mut self, p: f64) {
+        self.inner.set_add_node_prob(p);
+    }
+    pub fn set_add_conn_prob(&mut self, p: f64) {
+        self.inner.set_add_conn_prob(p);
+    }
+    pub fn set_weight_strength(&mut self, s: f64) {
+        self.inner.set_weight_strength(s);
     }
 }
 

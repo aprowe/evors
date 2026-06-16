@@ -99,6 +99,26 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> SoftStochastic<X, S> {
         self.pool.iter().map(|m| m.genome.clone()).collect()
     }
 
+    /// Mutable access to the owned genetics (e.g. to live-tune mutation rates).
+    pub fn genetics_mut(&mut self) -> &mut X {
+        &mut self.genetics
+    }
+
+    /// Run `f` over each pool genome without cloning — cheap instrumentation.
+    pub fn pool_fold<T>(&self, init: T, mut f: impl FnMut(T, &X::Genome) -> T) -> T {
+        self.pool.iter().fold(init, |acc, m| f(acc, &m.genome))
+    }
+
+    /// The current pool's highest-fitness genome (changes live as the pool
+    /// churns — useful for a display that should reflect ongoing exploration,
+    /// unlike the monotonic all-time `best`).
+    pub fn pool_best_genome(&self) -> Option<X::Genome> {
+        self.pool
+            .iter()
+            .max_by(|a, b| a.fitness.partial_cmp(&b.fitness).unwrap())
+            .map(|m| m.genome.clone())
+    }
+
     /// Boltzmann (softmax over fitness/temperature) selection index.
     fn boltzmann_pick(
         pool: &[Member<X::Genome, S>],
