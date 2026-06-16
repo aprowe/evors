@@ -44,6 +44,7 @@ fn main() {
             target: 150,
             temperature: 0.1,
             novelty_weight: 0.1,
+            behavior_weight: 0.0,
             knn: 5,
             seed: 7,
         },

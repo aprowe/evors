@@ -30,6 +30,15 @@ impl Fitness for f64 {
     }
 }
 
+/// Trivial behavior distance for scalar scores (absolute difference). Lets a
+/// plain `f64` score satisfy strategies that require `Behavior`; pair it with a
+/// zero behavior weight to recover pure genetic novelty.
+impl Behavior for f64 {
+    fn behavior_dist(&self, other: &Self) -> f64 {
+        (self - other).abs()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

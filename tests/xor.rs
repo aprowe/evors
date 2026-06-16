@@ -111,6 +111,7 @@ fn soft_stochastic_solves_xor() {
             target: 120,
             temperature: 0.1,
             novelty_weight: 0.2,
+            behavior_weight: 0.0,
             knn: 5,
             seed: 7,
         },
