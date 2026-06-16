@@ -1,4 +1,5 @@
 use crate::genetic::Genetic;
+use crate::observe::{NoObserver, Observer, Progress};
 use crate::strategy::EvolutionStrategy;
 
 /// When to stop a run.
@@ -63,31 +64,30 @@ where
         .collect()
 }
 
-/// Drive a self-contained strategy against `fitness` until `cfg.stop`.
-/// The strategy owns its genetics and rng, so the runner needs neither.
-pub fn run<St, F>(
+/// Drive a strategy against `fitness`, emitting progress to `obs` each eval.
+pub fn run_observed<St, F, O>(
     cfg: &RunConfig<St::Score>,
     strategy: &mut St,
     fitness: F,
+    obs: &mut O,
 ) -> Outcome<<St::Genetic as Genetic>::Genome, St::Score>
 where
     St: EvolutionStrategy,
     F: Fn(&<St::Genetic as Genetic>::Genome) -> St::Score + Sync,
     <St::Genetic as Genetic>::Genome: Clone + Send,
     St::Score: Clone + Send,
+    O: Observer<<St::Genetic as Genetic>::Genome, St::Score>,
 {
     let mut generations = 0usize;
     let mut trials = 0usize;
     let batch_size = cfg.batch_size.max(1);
 
     loop {
-        // Hard cap, applied regardless of `stop`.
         if let Some(cap) = cfg.max_trials {
             if trials >= cap {
                 break;
             }
         }
-        // Stop checks BEFORE producing more work.
         match &cfg.stop {
             Stop::Generations(g) if generations >= *g => break,
             Stop::Trials(t) if trials >= *t => break,
@@ -101,14 +101,20 @@ where
             _ => {}
         }
 
-        // Ask for a batch against the current strategy snapshot.
         let batch: Vec<<St::Genetic as Genetic>::Genome> =
             (0..batch_size).map(|_| strategy.next()).collect();
 
-        // Evaluate, then report sequentially so steady-state strategies update per-report.
         for (g, s) in evaluate(batch, &fitness) {
-            strategy.report(g, s);
             trials += 1;
+            // Observe BEFORE report (no clone): refs to the current genome/score.
+            obs.on_eval(Progress {
+                trials,
+                generation: generations,
+                genome: &g,
+                score: &s,
+                best_score: strategy.best().map(|(_, bs)| bs),
+            });
+            strategy.report(g, s);
         }
         generations += 1;
     }
@@ -117,12 +123,24 @@ where
         Some((g, s)) => (Some(g.clone()), Some(s.clone())),
         None => (None, None),
     };
-    Outcome {
-        best_genome,
-        best_score,
-        generations,
-        trials,
-    }
+    Outcome { best_genome, best_score, generations, trials }
+}
+
+/// Drive a self-contained strategy against `fitness` until `cfg.stop`.
+/// The strategy owns its genetics and rng, so the runner needs neither.
+/// Drive a strategy with no observation (see `run_observed`).
+pub fn run<St, F>(
+    cfg: &RunConfig<St::Score>,
+    strategy: &mut St,
+    fitness: F,
+) -> Outcome<<St::Genetic as Genetic>::Genome, St::Score>
+where
+    St: EvolutionStrategy,
+    F: Fn(&<St::Genetic as Genetic>::Genome) -> St::Score + Sync,
+    <St::Genetic as Genetic>::Genome: Clone + Send,
+    St::Score: Clone + Send,
+{
+    run_observed(cfg, strategy, fitness, &mut NoObserver)
 }
 
 #[cfg(test)]
