@@ -114,29 +114,45 @@ Boltzmann weights (no distance bias).
   band marked.
 - The existing coverage bar chart gains a speciated series.
 
-## Implementation note — mating alone was insufficient
+## Implementation note — the explore↔tidy tension, and three knobs
 
-The two-circles experiment showed that **assortative mating alone barely thins the
-dead zone** (between-fraction ~0.16 for both SSEA and speciated, sometimes worse):
-SSEA's cull *rewards novelty*, and the empty space between basins is the most
-novel region, so novelty-driven survival keeps refilling it regardless of who
-breeds with whom. The speciated cull therefore also **gates novelty by fitness**:
+The two-circles experiment exposed a genuine tension. **Assortative mating alone
+barely thins the dead zone** (~0.16 for both SSEA and speciated): SSEA's cull
+*rewards novelty*, and the empty gap between basins is the most novel region, so
+novelty-driven survival keeps refilling it regardless of who breeds. Worse, the
+gap population is dominated by SSEA's constant random-exploration injection
+(≈5% of steps), so it is partly *structural* — those organisms **are** the
+exploration. You cannot have strong exploration and an empty gap simultaneously.
 
-```
-combined = fitness · (1 − w + w · novelty)        // was (1−w)·fitness + w·novelty
-```
+The final strategy therefore exposes three knobs and lets the user pick a point on
+the spectrum:
 
-so a novel-but-low-fitness explorer in the dead zone has near-zero survival, while
-diversity is preserved *among good solutions*. With this, between-fraction drops to
-~0.10 (vs SSEA's ~0.17) and species cluster cleanly on the two rings. Across the
-gauntlet, speciated keeps strong coverage of the *good* basins (rastrigin ~24,
-griewank ~58) — close to SSEA and far above DE/Classic — trading SSEA's coverage of
-marginal basins for tighter, less-scattered clusters.
+1. **`mate_locality`** — assortative mating (breed with close kin); forms species.
+2. **`archive_prob`** — a novelty **archive**: each evaluated genome is sampled
+   into an archive with this probability, and novelty is measured against pool ∪
+   archive. Explored regions (incl. the gap) stop being novel, so organisms push
+   to fresh frontiers instead of camping — **this preserves exploration**. Its
+   dead-zone thinning is real but modest/noisy on its own (it can't beat the
+   re-injection rate).
+3. **`speciation_pressure`** — a fitness gate on the novelty bonus:
+   ```
+   combined = (1 − w)·fitness + w·novelty·fitness^speciation_pressure
+   ```
+   `0` = ungated novelty (max exploration, populated gap); `1` = novelty scaled by
+   fitness (tidy species, less exploration). It interpolates between the two.
+
+**Chosen demo/test point:** `mate_locality = 5`, `archive_prob = 0.05`,
+`speciation_pressure = 0.6` — keeps the archive's exploration while reliably
+thinning the gap on all tested seeds (between-fraction ~0.17 → ~0.12–0.13, both
+rings still covered). `0.8` overshoots and goes non-monotonic/noisy. Across the
+gauntlet, speciated keeps strong coverage of the good basins (rastrigin ~24,
+griewank ~58) — close to SSEA, far above DE/Classic.
 
 ## Scope / non-goals
 
-- Two changes vs SSEA: distance-biased crossover mating **and** fitness-gated
-  novelty in the cull (the experiment above showed both are needed).
+- Three tunable knobs vs SSEA: distance-biased mating, a novelty archive, and a
+  fitness gate (`speciation_pressure`). The experiment showed no single mechanism
+  both keeps full exploration and strongly empties the gap — the gate is the dial.
 - No species IDs, counts, or explicit fitness sharing.
 - Deliberate code duplication of the SSEA core to keep the tuned `SoftStochastic`
   untouched; a future DRY refactor (shared cull/novelty module) is out of scope.

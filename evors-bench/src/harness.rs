@@ -233,6 +233,8 @@ pub fn default_configs() -> Vec<Config> {
                 knn: 5,
                 seed: 0,
                 mate_locality: loc,
+                archive_prob: 0.05,
+                speciation_pressure: 0.6,
             }),
             mutation_step: 0.3,
         });

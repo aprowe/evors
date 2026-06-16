@@ -60,6 +60,8 @@ fn main() {
             knn: 5,
             seed: 1,
             mate_locality: 5.0,
+            archive_prob: 0.05,
+            speciation_pressure: 0.6,
         },
     );
     let _ = run(&cfg(), &mut spec, fitness);

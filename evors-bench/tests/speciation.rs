@@ -45,6 +45,8 @@ fn speciation_reduces_between_population() {
             knn: 5,
             seed: 1,
             mate_locality: 5.0,
+            archive_prob: 0.05,
+            speciation_pressure: 0.6,
         },
     );
     let _ = run(&cfg(), &mut spec, fitness);
@@ -80,6 +82,8 @@ fn speciated_solves_sphere() {
             knn: 5,
             seed: 0,
             mate_locality: 2.0,
+            archive_prob: 0.05,
+            speciation_pressure: 0.6,
         }),
         mutation_step: 0.3,
     };

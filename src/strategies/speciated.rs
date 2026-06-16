@@ -18,6 +18,19 @@ pub struct SpeciatedSoftStochasticInfo {
     /// Assortative-mating locality: how strongly crossover prefers a mate close
     /// (by `gene_dist`) to the first parent. 0 = no bias (like plain soft).
     pub mate_locality: f64,
+    /// Novelty-archive sampling rate, `[0, 1]`. Each evaluated genome is added to
+    /// a behavior archive with this probability; novelty is then measured against
+    /// the live pool PLUS the archive, so once a region has been explored it is no
+    /// longer novel and organisms stop camping there (they push to fresh
+    /// frontiers). 0 disables the archive (novelty vs the live pool only).
+    pub archive_prob: f64,
+    /// How strongly fitness gates the novelty bonus in survival, `[0, ∞)`. The
+    /// survival score is `(1−w)·fitness + w·novelty·fitness^speciation_pressure`.
+    /// 0 = ungated novelty (maximum exploration; the dead zone between basins
+    /// stays populated). 1 = novelty only helps in proportion to fitness (tidy
+    /// species on the optima, less exploration). Intermediate values trade
+    /// between the two; pair with `archive_prob` to keep exploration alive.
+    pub speciation_pressure: f64,
     pub seed: u64,
 }
 
@@ -30,6 +43,8 @@ impl Default for SpeciatedSoftStochasticInfo {
             behavior_weight: 0.0,
             knn: 5,
             mate_locality: 1.0,
+            archive_prob: 0.05,
+            speciation_pressure: 0.5,
             seed: 0,
         }
     }
@@ -60,12 +75,20 @@ pub struct SpeciatedSoftStochastic<X: Genetic, S> {
     behavior_weight: f64,
     knn: usize,
     mate_locality: f64,
+    archive_prob: f64,
+    speciation_pressure: f64,
+    /// Behavior archive: genomes sampled from past evaluations. Novelty is
+    /// measured against pool ∪ archive, so explored regions stop being novel.
+    archive: Vec<X::Genome>,
     pool: Vec<Member<X::Genome, S>>,
     best: Option<(X::Genome, S)>,
     /// Bulk-refresh every this many culls (amortizes the O(pool²) recompute).
     refresh_interval: usize,
     since_refresh: usize,
 }
+
+/// Cap on the novelty archive (bounds the O(pool·archive) novelty cost).
+const ARCHIVE_MAX: usize = 2000;
 
 impl<X: Genetic, S: Fitness + Behavior + Clone> SpeciatedSoftStochastic<X, S> {
     pub fn new(genetics: X, info: SpeciatedSoftStochasticInfo) -> Self {
@@ -78,6 +101,9 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> SpeciatedSoftStochastic<X, S> {
             behavior_weight: info.behavior_weight.clamp(0.0, 1.0),
             knn: info.knn.max(1),
             mate_locality: info.mate_locality.max(0.0),
+            archive_prob: info.archive_prob.clamp(0.0, 1.0),
+            speciation_pressure: info.speciation_pressure.max(0.0),
+            archive: Vec::new(),
             pool: Vec::new(),
             best: None,
             refresh_interval: (info.target.max(2) / 8).max(4),
@@ -206,14 +232,29 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> SpeciatedSoftStochastic<X, S> {
         dists.iter().take(k).sum::<f64>() / k as f64
     }
 
+    /// Genetic novelty against the live pool PLUS the archive — once a region
+    /// has been archived, sitting there is no longer novel.
     fn genetic_novelty(
         genetics: &X,
         pool: &[Member<X::Genome, S>],
+        archive: &[X::Genome],
         knn: usize,
         genome: &X::Genome,
         skip: Option<usize>,
     ) -> f64 {
-        Self::knn_mean(pool, knn, skip, |m| genetics.gene_dist(genome, &m.genome))
+        let mut dists: Vec<f64> = pool
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| Some(*i) != skip)
+            .map(|(_, m)| genetics.gene_dist(genome, &m.genome))
+            .collect();
+        dists.extend(archive.iter().map(|g| genetics.gene_dist(genome, g)));
+        if dists.is_empty() {
+            return 0.0;
+        }
+        dists.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let k = knn.min(dists.len());
+        dists.iter().take(k).sum::<f64>() / k as f64
     }
 
     fn behavioral_novelty(
@@ -234,6 +275,7 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> SpeciatedSoftStochastic<X, S> {
                 Self::genetic_novelty(
                     &self.genetics,
                     &self.pool,
+                    &self.archive,
                     self.knn,
                     &self.pool[i].genome,
                     Some(i),
@@ -305,12 +347,12 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> SpeciatedSoftStochastic<X, S> {
             } else {
                 gnorm
             };
-            // Fitness-GATED novelty: novelty only helps survival in proportion
-            // to fitness, so isolated low-fitness "explorers" in the dead zone
-            // between basins are culled while diversity is preserved *among good
-            // solutions*. This is what makes soft species cluster on the optima
-            // rather than smear through the empty space between them.
-            let combined = (nf * (1.0 - w + w * nn)).clamp(0.0, 1.0);
+            // Speciation = assortative mating + novelty archive (explored regions
+            // stop being novel) + a tunable fitness gate on the novelty bonus.
+            // `speciation_pressure` interpolates: 0 = ungated novelty (max
+            // exploration), 1 = novelty scaled by fitness (tidy species).
+            let gate = nf.max(0.0).powf(self.speciation_pressure);
+            let combined = ((1.0 - w) * nf + w * nn * gate).clamp(0.0, 1.0);
             let p_survive = combined.powf(pressure).clamp(0.0, 1.0);
             if self.rng.random_bool(p_survive) {
                 survivors.push(m);
@@ -366,13 +408,28 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> EvolutionStrategy
         if self.best.as_ref().map_or(true, |(_, s)| fit > s.fitness()) {
             self.best = Some((genome.clone(), score.clone()));
         }
-        // Compute the new member's novelty against the current pool once, O(pool).
-        let gnovelty = Self::genetic_novelty(&self.genetics, &self.pool, self.knn, &genome, None);
+        // Compute the new member's novelty against the pool ∪ archive, O(pool+archive).
+        let gnovelty = Self::genetic_novelty(
+            &self.genetics,
+            &self.pool,
+            &self.archive,
+            self.knn,
+            &genome,
+            None,
+        );
         let bnovelty = if self.behavior_weight > 0.0 {
             Self::behavioral_novelty(&self.pool, self.knn, &score, None)
         } else {
             0.0
         };
+        // Sample this genome into the behavior archive (bounded, random eviction).
+        if self.archive_prob > 0.0 && self.rng.random_bool(self.archive_prob) {
+            self.archive.push(genome.clone());
+            if self.archive.len() > ARCHIVE_MAX {
+                let idx = self.rng.random_range(0..self.archive.len());
+                self.archive.swap_remove(idx);
+            }
+        }
         self.pool.push(Member {
             genome,
             score,
