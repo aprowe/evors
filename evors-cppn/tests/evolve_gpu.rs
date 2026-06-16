@@ -33,7 +33,12 @@ fn image_trial_improves_toward_target() {
     let late = trial.best_fitness();
 
     assert!(late >= early, "fitness regressed: {early} -> {late}");
-    assert!(late > 0.81, "did not converge enough: best {late}");
+    // Substantial convergence above the ~0.6 random-CPPN floor on this
+    // high-frequency target. (The default CppnParams use bold weights, which
+    // trade a little match accuracy for richer patterns, so the converged level
+    // here sits around 0.77 rather than the old gentle-weight ~0.83.)
+    assert!(late > 0.72, "did not converge enough: best {late}");
+    assert!(late > early + 0.02, "did not improve meaningfully: {early} -> {late}");
 
     // The champion render is a real, non-trivial image (not all black).
     let render = trial.best_render();
