@@ -103,3 +103,15 @@ See `charts/` for rendered convergence and solution-spread figures.
 ## Features
 
 - `parallel` — evaluate each batch's fitness in parallel via `rayon`.
+
+## Workspace
+
+This repo is a Cargo workspace:
+
+- **`evors`** (this crate) — the core traits, strategies, and runner.
+- **[`evors-neat`](evors-neat/)** — NEAT (topology-evolving networks) implemented
+  as an `evors::Genetic`, running on SSEA. Demonstrates the abstractions
+  generalize beyond fixed-shape genomes; solves XOR with a minimal single-hidden-node
+  network (`charts/neat_xor.png`).
+
+`cargo test --workspace` runs everything.

@@ -57,9 +57,14 @@ impl<X: Genetic> ClassicPopulation<X> {
         self.current.iter().map(|(g, _)| g.clone()).collect()
     }
 
-    /// Tournament selection from `current` (must be non-empty). Associated fn
-    /// over explicit fields to keep borrows disjoint.
-    fn select(current: &[(X::Genome, f64)], tournament: usize, rng: &mut ChaCha8Rng) -> X::Genome {
+    /// Tournament selection from `current` (must be non-empty). Returns the
+    /// winner's genome and fitness. Associated fn over explicit fields to keep
+    /// borrows disjoint.
+    fn select(
+        current: &[(X::Genome, f64)],
+        tournament: usize,
+        rng: &mut ChaCha8Rng,
+    ) -> (X::Genome, f64) {
         let mut best: Option<&(X::Genome, f64)> = None;
         for _ in 0..tournament {
             let cand = &current[rng.random_range(0..current.len())];
@@ -67,7 +72,7 @@ impl<X: Genetic> ClassicPopulation<X> {
                 best = Some(cand);
             }
         }
-        best.unwrap().0.clone()
+        best.unwrap().clone()
     }
 }
 
@@ -83,9 +88,11 @@ impl<X: Genetic> EvolutionStrategy for ClassicPopulation<X> {
             }
             return self.genetics.random(&mut self.rng);
         }
-        let p1 = Self::select(&self.current, self.tournament, &mut self.rng);
-        let p2 = Self::select(&self.current, self.tournament, &mut self.rng);
-        let child = self.genetics.cross(&p1, &p2, &mut self.rng);
+        let (g1, f1) = Self::select(&self.current, self.tournament, &mut self.rng);
+        let (g2, f2) = Self::select(&self.current, self.tournament, &mut self.rng);
+        // Pass the fitter parent as `a` (the preferred-parent convention).
+        let (a, b) = if f1 >= f2 { (&g1, &g2) } else { (&g2, &g1) };
+        let child = self.genetics.cross(a, b, &mut self.rng);
         if self.rng.random_bool(self.mutation_rate) {
             self.genetics.mutate(&child, &mut self.rng)
         } else {

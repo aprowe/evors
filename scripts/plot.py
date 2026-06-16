@@ -135,3 +135,31 @@ fig.suptitle("Angular coverage of on-ring solutions (12 sectors)", y=1.04)
 fig.tight_layout()
 fig.savefig("charts/circle_angular.png", bbox_inches="tight")
 print("wrote charts/circle_angular.png")
+
+
+# ---------------- 4. NEAT XOR: fitness + topology growth ----------------
+if os.path.exists("data/neat_xor.csv"):
+    _, dn = load_csv("data/neat_xor.csv")
+    tr, bestf, hidden = dn[:, 0], dn[:, 1], dn[:, 2]
+    NEAT = "#5e548e"
+    fig, ax1 = plt.subplots(figsize=(9, 5.0))
+    ax1.plot(tr, bestf, color=NEAT, lw=1.8, label="best fitness")
+    ax1.axhline(0.98, color="gray", ls="--", lw=1, alpha=0.7)
+    ax1.set_xlabel("evaluations (trials)")
+    ax1.set_ylabel("best fitness  (1 − MSE)", color=NEAT)
+    ax1.tick_params(axis="y", labelcolor=NEAT)
+    ax1.set_ylim(0.5, 1.01)
+    ax2 = ax1.twinx()
+    ax2.step(tr, hidden, color="#e07a5f", lw=1.6, where="post", label="champion hidden nodes")
+    ax2.set_ylabel("champion hidden-node count", color="#e07a5f")
+    ax2.tick_params(axis="y", labelcolor="#e07a5f")
+    ax2.set_ylim(-0.2, max(3, hidden.max() + 1))
+    ax2.grid(False)
+    hit = first_hit(bestf)
+    title = "NEAT on SSEA — XOR: fitness vs evolved topology"
+    if hit is not None:
+        title += f"  (solved @ {int(tr[hit]):,} evals)"
+    ax1.set_title(title)
+    fig.tight_layout()
+    fig.savefig("charts/neat_xor.png")
+    print("wrote charts/neat_xor.png")

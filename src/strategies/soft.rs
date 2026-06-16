@@ -202,8 +202,13 @@ impl<X: Genetic> EvolutionStrategy for SoftStochastic<X> {
             self.genetics.mutate(&parent, &mut self.rng)
         } else if action < 0.9 {
             let oi = Self::boltzmann_pick(&self.pool, self.temperature, &mut self.rng);
-            let other = self.pool[oi].genome.clone();
-            self.genetics.cross(&parent, &other, &mut self.rng)
+            // Pass the fitter parent as `a` (the preferred-parent convention).
+            let (a, b) = if self.pool[pi].fitness >= self.pool[oi].fitness {
+                (parent, self.pool[oi].genome.clone())
+            } else {
+                (self.pool[oi].genome.clone(), parent)
+            };
+            self.genetics.cross(&a, &b, &mut self.rng)
         } else {
             parent // replay
         }

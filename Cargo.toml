@@ -11,3 +11,6 @@ rayon = { version = "1", optional = true }
 [features]
 default = []
 parallel = ["dep:rayon"]
+
+[workspace]
+members = [".", "evors-neat"]

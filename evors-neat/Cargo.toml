@@ -1,0 +1,9 @@
+[package]
+name = "evors-neat"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+evors = { path = ".." }
+rand = "0.9"
+rand_chacha = "0.9"

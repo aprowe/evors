@@ -7,6 +7,10 @@ pub trait Genetic {
     type Genome: Clone;
 
     fn random(&self, rng: &mut impl Rng) -> Self::Genome;
+    /// Recombine two parents. By convention `a` is the **preferred** parent:
+    /// strategies pass the fitter of the two as `a`, and implementations may
+    /// bias inheritance toward it (e.g. NEAT inherits disjoint/excess genes from
+    /// the fitter parent). Symmetric operators may ignore the distinction.
     fn cross(&self, a: &Self::Genome, b: &Self::Genome, rng: &mut impl Rng) -> Self::Genome;
     fn mutate(&self, g: &Self::Genome, rng: &mut impl Rng) -> Self::Genome;
     /// Genotypic distance between two genomes.
