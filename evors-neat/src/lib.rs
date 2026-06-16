@@ -13,5 +13,5 @@ pub mod innovation;
 pub mod network;
 
 pub use genetics::{NeatGenetics, NeatParams};
-pub use genome::{ConnGene, NeatGenome, NodeGene, NodeKind};
+pub use genome::{Activation, ConnGene, NeatGenome, NodeGene, NodeKind};
 pub use network::activate;

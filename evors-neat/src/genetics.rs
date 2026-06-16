@@ -1,6 +1,6 @@
 //! `NeatGenetics` — the NEAT instruction set, implementing [`evors::Genetic`].
 
-use crate::genome::{ConnGene, NeatGenome, NodeGene, NodeKind};
+use crate::genome::{Activation, ConnGene, NeatGenome, NodeGene, NodeKind};
 use crate::innovation::Innovations;
 use evors::Genetic;
 use rand::Rng;
@@ -26,6 +26,14 @@ pub struct NeatParams {
     pub c_excess: f64,
     pub c_disjoint: f64,
     pub c_weight: f64,
+    /// Activation functions new hidden nodes may take (and that activation
+    /// mutation draws from). Defaults to `[Sigmoid]` — classic NEAT.
+    pub hidden_activations: Vec<Activation>,
+    /// Activation for output nodes.
+    pub output_activation: Activation,
+    /// Probability `mutate` re-rolls a random hidden/output node's activation
+    /// (from `hidden_activations`). Defaults to 0 — classic NEAT never does this.
+    pub activation_mutate_prob: f64,
 }
 
 impl Default for NeatParams {
@@ -40,6 +48,9 @@ impl Default for NeatParams {
             c_excess: 1.0,
             c_disjoint: 1.0,
             c_weight: 0.4,
+            hidden_activations: vec![Activation::Sigmoid],
+            output_activation: Activation::Sigmoid,
+            activation_mutate_prob: 0.0,
         }
     }
 }
@@ -82,21 +93,36 @@ impl NeatGenetics {
             .map(|id| NodeGene {
                 id,
                 kind: NodeKind::Input,
+                activation: Activation::Identity,
             })
             .collect();
         v.push(NodeGene {
             id: self.bias_id(),
             kind: NodeKind::Bias,
+            activation: Activation::Identity,
         });
         v.extend(self.output_ids().map(|id| NodeGene {
             id,
             kind: NodeKind::Output,
+            activation: self.params.output_activation,
         }));
         v
     }
 
     fn rand_weight(&self, rng: &mut impl Rng) -> f64 {
         rng.random_range(-self.params.weight_init_range..self.params.weight_init_range)
+    }
+
+    /// A random activation from the configured set (Sigmoid if the set is empty).
+    /// Does NOT draw from `rng` unless there is a real choice (>1 option), so
+    /// classic single-activation NEAT keeps an unchanged random stream.
+    fn rand_activation(&self, rng: &mut impl Rng) -> Activation {
+        let set = &self.params.hidden_activations;
+        match set.len() {
+            0 => Activation::Sigmoid,
+            1 => set[0],
+            n => set[rng.random_range(0..n)],
+        }
     }
 
     fn perturb_weights(&self, g: &mut NeatGenome, rng: &mut impl Rng) {
@@ -173,6 +199,7 @@ impl NeatGenetics {
             g.nodes.push(NodeGene {
                 id: node,
                 kind: NodeKind::Hidden,
+                activation: self.rand_activation(rng),
             });
         }
         g.conns.push(ConnGene {
@@ -228,6 +255,21 @@ impl Genetic for NeatGenetics {
         if rng.random_bool(self.params.add_node_prob) {
             self.add_node(&mut child, rng);
         }
+        if self.params.activation_mutate_prob > 0.0
+            && rng.random_bool(self.params.activation_mutate_prob)
+        {
+            let targets: Vec<usize> = child
+                .nodes
+                .iter()
+                .enumerate()
+                .filter(|(_, n)| matches!(n.kind, NodeKind::Hidden | NodeKind::Output))
+                .map(|(i, _)| i)
+                .collect();
+            if !targets.is_empty() {
+                let i = targets[rng.random_range(0..targets.len())];
+                child.nodes[i].activation = self.rand_activation(rng);
+            }
+        }
         child
     }
 
@@ -259,11 +301,13 @@ impl Genetic for NeatGenetics {
         for c in &conns {
             for id in [c.from, c.to] {
                 if !present.contains(&id) && added.insert(id) {
-                    let kind = a
-                        .node_kind(id)
-                        .or_else(|| b.node_kind(id))
-                        .unwrap_or(NodeKind::Hidden);
-                    nodes.push(NodeGene { id, kind });
+                    // Inherit the hidden node (kind + activation) from a, else b.
+                    let proto = a.node(id).or_else(|| b.node(id));
+                    nodes.push(NodeGene {
+                        id,
+                        kind: proto.map(|n| n.kind).unwrap_or(NodeKind::Hidden),
+                        activation: proto.map(|n| n.activation).unwrap_or(Activation::Sigmoid),
+                    });
                 }
             }
         }

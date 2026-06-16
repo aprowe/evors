@@ -1,0 +1,16 @@
+[package]
+name = "evors-cppn"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+evors = { path = ".." }
+evors-neat = { path = "../evors-neat" }
+rand = "0.9"
+rand_chacha = "0.9"
+# GL plumbing — versions matched to ~/projects/soap-in-a-tub.
+glow = "0.17.0"
+glutin = "0.32.3"
+glutin-winit = "0.5.0"
+winit = "0.30"
+log = "0.4"

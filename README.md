@@ -113,5 +113,9 @@ This repo is a Cargo workspace:
   as an `evors::Genetic`, running on SSEA. Demonstrates the abstractions
   generalize beyond fixed-shape genomes; solves XOR with a minimal single-hidden-node
   network (`charts/neat_xor.png`).
+- **[`evors-cppn`](evors-cppn/)** — evolve images with CPPN-NEAT, rendered and
+  scored on the GPU (egui + glow). Sub-project A (the headless GPU eval core) is
+  done; the evolution loop and egui app follow.
 
-`cargo test --workspace` runs everything.
+`cargo test --workspace` runs everything. The `evors-cppn` GPU tests require a
+real OpenGL 4.3 context.

@@ -9,11 +9,39 @@ pub enum NodeKind {
     Hidden,
 }
 
+/// A node's activation function. The integer mapping (`as u32`) is **stable**
+/// and shared by the CPU evaluator and any GPU shader interpreter (see
+/// `evors-cppn`), so do not reorder these variants.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Activation {
+    Identity = 0,
+    Sigmoid = 1,
+    Tanh = 2,
+    Sin = 3,
+    Gauss = 4,
+    Abs = 5,
+}
+
+impl Activation {
+    /// Apply the activation function.
+    pub fn apply(self, x: f64) -> f64 {
+        match self {
+            Activation::Identity => x,
+            Activation::Sigmoid => 1.0 / (1.0 + (-4.9 * x).exp()),
+            Activation::Tanh => x.tanh(),
+            Activation::Sin => x.sin(),
+            Activation::Gauss => (-x * x).exp(),
+            Activation::Abs => x.abs(),
+        }
+    }
+}
+
 /// A node gene.
 #[derive(Clone, Copy, Debug)]
 pub struct NodeGene {
     pub id: u64,
     pub kind: NodeKind,
+    pub activation: Activation,
 }
 
 /// A connection gene. `innov` is the historical marking used to align genes
@@ -51,5 +79,9 @@ impl NeatGenome {
 
     pub fn node_kind(&self, id: u64) -> Option<NodeKind> {
         self.nodes.iter().find(|n| n.id == id).map(|n| n.kind)
+    }
+
+    pub fn node(&self, id: u64) -> Option<NodeGene> {
+        self.nodes.iter().find(|n| n.id == id).copied()
     }
 }

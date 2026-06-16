@@ -3,13 +3,8 @@
 //! The genome's acyclic invariant (guaranteed by the mutation operators) lets us
 //! activate nodes in a single topological pass.
 
-use crate::genome::{NeatGenome, NodeKind};
+use crate::genome::{Activation, NeatGenome, NodeKind};
 use std::collections::HashMap;
-
-/// Classic NEAT steep sigmoid.
-fn sigmoid(x: f64) -> f64 {
-    1.0 / (1.0 + (-4.9 * x).exp())
-}
 
 /// Activate `genome` on `inputs` (length must equal the network's input count)
 /// and return the output node values in output-id order.
@@ -43,6 +38,8 @@ pub fn activate(genome: &NeatGenome, inputs: &[f64]) -> Vec<f64> {
     for c in genome.conns.iter().filter(|c| c.enabled) {
         incoming.entry(c.to).or_default().push((c.from, c.weight));
     }
+    let activation: HashMap<u64, Activation> =
+        genome.nodes.iter().map(|n| (n.id, n.activation)).collect();
 
     // Topological order over enabled edges (Kahn's algorithm).
     let order = topo_order(genome);
@@ -57,7 +54,8 @@ pub fn activate(genome: &NeatGenome, inputs: &[f64]) -> Vec<f64> {
                 .iter()
                 .map(|(from, w)| value.get(from).copied().unwrap_or(0.0) * w)
                 .sum();
-            value.insert(id, sigmoid(sum));
+            let act = activation.get(&id).copied().unwrap_or(Activation::Sigmoid);
+            value.insert(id, act.apply(sum));
         }
     }
 
@@ -115,27 +113,23 @@ mod tests {
     use super::*;
     use crate::genome::{ConnGene, NodeGene};
 
+    fn node(id: u64, kind: NodeKind) -> NodeGene {
+        NodeGene {
+            id,
+            kind,
+            activation: Activation::Sigmoid,
+        }
+    }
+
     #[test]
     fn activates_a_hand_built_or_gate() {
         // 2 inputs (0,1) + bias (2) -> output (3). Weights make an OR-ish gate.
         let genome = NeatGenome {
             nodes: vec![
-                NodeGene {
-                    id: 0,
-                    kind: NodeKind::Input,
-                },
-                NodeGene {
-                    id: 1,
-                    kind: NodeKind::Input,
-                },
-                NodeGene {
-                    id: 2,
-                    kind: NodeKind::Bias,
-                },
-                NodeGene {
-                    id: 3,
-                    kind: NodeKind::Output,
-                },
+                node(0, NodeKind::Input),
+                node(1, NodeKind::Input),
+                node(2, NodeKind::Bias),
+                node(3, NodeKind::Output),
             ],
             conns: vec![
                 ConnGene {
