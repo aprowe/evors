@@ -226,7 +226,9 @@ pub fn default_configs() -> Vec<Config> {
                 novelty_weight: nw,
                 temperature: temp,
                 behavior_weight: 0.0,
-                knn: 5,
+                // knn=15: a larger novelty neighbourhood reduces kNN saturation,
+                // so SSEA spreads more evenly instead of clumping.
+                knn: 15,
                 seed: 0,
             }),
             mutation_step: 0.3,

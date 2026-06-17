@@ -63,7 +63,9 @@ fn main() {
             novelty_weight: 0.6,
             temperature: 0.2,
             behavior_weight: 0.0,
-            knn: 5,
+            // knn=15 (not the usual 5): a larger neighbourhood reduces kNN-novelty
+            // saturation, so SSEA spreads more evenly around each ring.
+            knn: 15,
             seed: 1,
         },
     );
