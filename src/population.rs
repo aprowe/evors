@@ -2,7 +2,9 @@
 //! the benchmark coverage metric) can read members without branching per type.
 
 use crate::genetic::Genetic;
-use crate::strategies::{ClassicPopulation, ResourceSoftStochastic, SoftStochastic, SpeciatedSoftStochastic};
+use crate::strategies::{
+    ClassicPopulation, ResourceSoftStochastic, SoftStochastic, SpeciatedSoftStochastic,
+};
 use crate::strategy::{Behavior, Fitness};
 
 pub trait PopulationView {

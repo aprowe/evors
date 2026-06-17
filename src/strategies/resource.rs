@@ -11,7 +11,9 @@ pub struct ResourceSoftStochasticInfo {
     /// Dimensionless sharing-radius multiplier. Each refresh,
     /// `σ = relative_width × median(pairwise gene_dist over the pool)`, so the
     /// niche width auto-scales to whatever `gene_dist` returns for this genome
-    /// type — no absolute units are hardcoded. Typical range 0.1–0.3.
+    /// type — no absolute units are hardcoded. Typical range 0.05–0.1: because
+    /// the median is dominated by inter-cluster distances, a larger multiplier
+    /// makes σ too coarse and the population clumps within each niche.
     pub relative_width: f64,
     /// Assortative-mating locality: how strongly crossover prefers a mate close
     /// (by `gene_dist`) to the first parent. 0 = no bias (unbiased selection).
@@ -24,8 +26,8 @@ impl Default for ResourceSoftStochasticInfo {
         Self {
             target: 100,
             temperature: 0.2,
-            relative_width: 0.15,
-            mate_locality: 1.0,
+            relative_width: 0.08,
+            mate_locality: 2.0,
             seed: 0,
         }
     }

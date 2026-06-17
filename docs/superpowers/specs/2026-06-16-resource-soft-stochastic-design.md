@@ -91,6 +91,19 @@ instantaneous it converges rather than oscillates.
    large, to keep cost bounded; over the default `target = 300` the full O(n²) is
    fine and matches SSEA's existing novelty-refresh cost.
 
+   **Tuning note (relative_width must be small).** Because the median is dominated
+   by *cross-niche* distance, `relative_width` should sit around **0.05–0.1**, not
+   the higher values a naïve reading suggests. At `0.15` σ is so coarse it treats
+   whole ring arcs as a single niche and the population *clumps* on each ring
+   (a ring-spread sweep showed ~14/24 angular sectors covered, between-fraction
+   ~0.18). At `relative_width = 0.05, mate_locality = 2` it resolves the
+   within-ring scale: ~20/24 sectors, even angular spread, and the dead zone
+   drops to ~0.02–0.07 — strictly better than SSEA (16% gap) on *both* spread and
+   gap. The tuned demo/test point is therefore `relative_width = 0.05,
+   mate_locality = 2.0, temperature = 0.2`. A lower temperature concentrates the
+   pool more tightly *on* the ring but trades away angular coverage (sharing
+   collapses into fewer, wider-separated niches), so 0.2 is kept.
+
 ### Caching / refresh cadence
 
 Crowding (per pool member) and σ are cached and **bulk-refreshed every `target/8`
@@ -142,12 +155,16 @@ In `evors-bench/tests/resource.rs`:
    occupancy every N trials via the `Observer`. Assert over the **back half** of
    the run:
    - **Diversity:** both `left` and `right` occupied in every back-half sample,
-     and `between_fraction` stays low (clear margin below the SSEA baseline level
-     established in the speciated work, ~0.17).
-   - **Stability:** the left and right occupancy counts are *steady* — relative
-     spread `(max − min) / mean` over the back-half samples is below a threshold
-     (e.g. < 0.5), i.e. no boom-bust oscillation. This is the property that
-     distinguishes the resource model from a greedy depletable one.
+     and `between_fraction` stays low. At the tuned config (`relative_width = 0.05,
+     mate_locality = 2`) this lands ~0.02–0.07 — clearly below the SSEA baseline
+     (~0.16), so the test asserts `< 0.15`.
+   - **Stability:** the left and right occupancy counts are *steady* — measured by
+     the **coefficient of variation** (std/mean) over the back-half samples, below
+     a threshold (~0.4; observed ~0.17–0.18), i.e. no boom-bust oscillation. CV is
+     used rather than `(max − min)/mean` because the per-member stochastic cull
+     makes the range form spike on lone transients even when the pool is steady.
+     This stability is the property that distinguishes the resource model from a
+     greedy depletable one.
 2. **`resource_solves_sphere`** — sanity: the strategy still optimizes (reaches
    success on the sphere problem), proving the cull machinery is intact.
 
@@ -167,14 +184,15 @@ Plus unit tests in `resource.rs`:
   via `run_one` (it satisfies `EvolutionStrategy<Score=f64> +
   PopulationView<Genome=Vec<f64>>`).
 - Add 1–2 resource configs to `default_configs` (e.g.
-  `target = 300, relative_width ∈ {0.1, 0.2}, mate_locality = 3`), so the strategy
+  `target = 300, relative_width ∈ {0.05, 0.1}, mate_locality = 2`), so the strategy
   runs across all 10 gauntlet problems and appears in the console leaderboard,
   `results.csv`, the convergence charts (automatic), and the coverage bar chart
   (add a resource series).
 - **Expectation:** basin coverage comparable to SSEA/Speciated, accuracy below DE
-  (the diversity tax). The standout is *diversity with no novelty score* plus a
-  stable pool — most visible on the two-circles scatter and the occupancy
-  time-series, not necessarily the scalar metrics.
+  (the diversity tax). Measured: strong coverage with no novelty score — griewank
+  ~74–79, rastrigin ~49, ackley ~28 basins. The standout is *even multi-basin
+  diversity with no novelty score* plus a stable pool — most visible on the
+  two-circles scatter and the occupancy time-series.
 
 ## Charts
 

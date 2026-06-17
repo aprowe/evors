@@ -249,7 +249,7 @@ pub fn default_configs() -> Vec<Config> {
             mutation_step: 0.3,
         });
     }
-    for &(target, rw, loc) in &[(300usize, 0.1f64, 3.0f64), (300, 0.2, 3.0)] {
+    for &(target, rw, loc) in &[(300usize, 0.05f64, 2.0f64), (300, 0.1, 2.0)] {
         v.push(Config {
             label: format!("resource(target={target},rw={rw},loc={loc})"),
             strat: Strat::Resource(ResourceSoftStochasticInfo {

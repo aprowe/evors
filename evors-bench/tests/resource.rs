@@ -17,8 +17,8 @@ fn resource_reaches_stable_equilibrium() {
         ResourceSoftStochasticInfo {
             target: 300,
             temperature: 0.2,
-            relative_width: 0.15,
-            mate_locality: 5.0,
+            relative_width: 0.05,
+            mate_locality: 2.0,
             seed: 1,
         },
     );
@@ -44,25 +44,26 @@ fn resource_reaches_stable_equilibrium() {
 
     // Diversity: both rings covered, dead zone thinned.
     //
-    // Config: mate_locality = 5.0 (bumped from 3.0 per the validation procedure;
-    // assortative mating across the gap is what keeps offspring off the dead zone)
-    // with relative_width = 0.15, temperature = 0.2, seed = 1.
+    // Config: relative_width = 0.05, mate_locality = 2.0, temperature = 0.2,
+    // seed = 1. relative_width sets sigma = 0.05 x median pairwise gene_dist;
+    // because the median is dominated by the ~10-unit cross-ring distance, a
+    // larger multiplier (the original 0.15) gives a sigma so coarse it treats
+    // whole ring arcs as one niche and the population clumps. 0.05 resolves the
+    // within-ring scale, so members spread around each ring AND the gap stays
+    // thin. A ring-spread sweep confirmed 0.05/loc=2 maximizes angular coverage
+    // (~19/24 sectors over seeds 0..5) while keeping the gap low.
     //
-    // The dead zone gate is positional (`|x| < GAP = 3.0`) with no fitness filter,
-    // so it always catches the ~5% pure-random genomes the strategy injects each
-    // step (`p_random` floor in `next`) plus in-flight crossover offspring. The
-    // floor of 0.15 from the draft was unreachable here: across a parameter sweep
-    // (mate_locality 3/5/8/10, relative_width 0.1-0.3, temperature 0.1-1.0) the
-    // best observed between-fraction was ~0.16-0.18, and pushing it lower traded
-    // off against niche stability. We assert it stays thinned below 0.25 (observed
-    // ~0.18, seed 1) -- this still fails loudly if the dead zone fills up (an
-    // unspeciated population parks ~0.5+ of the pool there).
+    // The dead zone gate is positional (`|x| < GAP = 3.0`) with no fitness
+    // filter, so it always catches the ~5% pure-random genomes the strategy
+    // injects each step (`p_random` floor in `next`). Observed between-fraction
+    // ~0.07 (seed 1). We assert it stays well thinned below 0.15 -- this fails
+    // loudly if the dead zone fills up (an unspeciated population parks ~0.5+).
     let pool = strat.members();
     assert!(covers_both(&pool), "resource should cover both rings");
     let bf = between_fraction(&pool);
     println!("resource between-fraction = {bf:.3}");
-    // observed ~0.18 (seed 1); see note above on why 0.15 is unreachable.
-    assert!(bf < 0.25, "dead zone not thinned: between-fraction {bf:.3}");
+    // observed ~0.07 (seed 1).
+    assert!(bf < 0.15, "dead zone not thinned: between-fraction {bf:.3}");
 
     // Stability: in the back half of the run, each niche's occupancy is steady
     // (no boom-bust). Two guards:
@@ -76,8 +77,8 @@ fn resource_reaches_stable_equilibrium() {
     // jitters around a steady mean. Over the back-half snapshots that range form
     // read 1.3-1.5 even though the population is genuinely steady. We instead use
     // the coefficient of variation (std / mean) -- the standard steadiness
-    // statistic -- which is robust to lone spikes. Observed CV: left ~0.44,
-    // right ~0.33 (seed 1). Threshold 0.6 = observed_max + ~0.15 margin; a real
+    // statistic -- which is robust to lone spikes. Observed CV: left ~0.17,
+    // right ~0.18 (seed 1). Threshold 0.4 leaves margin for seed variance; a real
     // boom-bust oscillation pushes CV well above 1.0.
     let half = chunks / 2;
     let cv = |xs: &[f64]| -> f64 {
@@ -91,9 +92,9 @@ fn resource_reaches_stable_equilibrium() {
     let sl = cv(&left);
     let sr = cv(&right);
     println!("back-half occupancy CV: left={sl:.2} right={sr:.2}");
-    // observed left~0.44, right~0.33 (seed 1); threshold = observed_max + ~0.15.
-    assert!(sl < 0.6, "left niche oscillated: occupancy CV {sl:.2}");
-    assert!(sr < 0.6, "right niche oscillated: occupancy CV {sr:.2}");
+    // observed left~0.17, right~0.18 (seed 1).
+    assert!(sl < 0.4, "left niche oscillated: occupancy CV {sl:.2}");
+    assert!(sr < 0.4, "right niche oscillated: occupancy CV {sr:.2}");
 }
 
 #[test]
