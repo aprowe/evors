@@ -35,10 +35,11 @@ struct Member<G, S> {
     genome: G,
     score: S,
     fitness: f64,
-    /// Cached genetic novelty (mean gene_dist to knn nearest).
+    /// Cached genetic novelty (stochastic weighted-kNN over gene_dist; see
+    /// `weighted_knn`). Re-sampled each refresh, so it fluctuates — ergodic.
     gnovelty: f64,
-    /// Cached behavioral novelty (mean behavior_dist to knn nearest); only
-    /// maintained when `behavior_weight > 0`.
+    /// Cached behavioral novelty (stochastic weighted-kNN over behavior_dist);
+    /// only maintained when `behavior_weight > 0`.
     bnovelty: f64,
 }
 
@@ -142,15 +143,22 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> SoftStochastic<X, S> {
         pool.len() - 1
     }
 
-    /// Mean of the `knn` smallest distances produced by `dist` from a probe to
-    /// the pool (excluding `skip`).
-    fn knn_mean(
+    /// **Stochastic weighted kNN.** Instead of the exact `knn` nearest, draw
+    /// `knn` neighbours by proximity-weighted sampling (weight `exp(−d/h)`, with
+    /// bandwidth `h` = the k-th nearest distance, auto-scaling to local density)
+    /// and return their mean distance. The randomness makes novelty **ergodic** —
+    /// every genome has a fluctuating, never-zero chance of scoring novel, so rare
+    /// lineages ("slivers") survive given enough time — and softens the hard
+    /// k-cutoff into a soft proximity gradient. Sampling is Efraimidis–Spirakis
+    /// (key `= u^(1/w)`; the `k` largest keys form the sample).
+    fn weighted_knn(
         pool: &[Member<X::Genome, S>],
         knn: usize,
         skip: Option<usize>,
+        rng: &mut ChaCha8Rng,
         mut dist: impl FnMut(&Member<X::Genome, S>) -> f64,
     ) -> f64 {
-        let mut dists: Vec<f64> = pool
+        let dists: Vec<f64> = pool
             .iter()
             .enumerate()
             .filter(|(i, _)| Some(*i) != skip)
@@ -159,9 +167,23 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> SoftStochastic<X, S> {
         if dists.is_empty() {
             return 0.0;
         }
-        dists.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let k = knn.min(dists.len());
-        dists.iter().take(k).sum::<f64>() / k as f64
+        // Bandwidth = the k-th nearest distance (local scale).
+        let mut sorted = dists.clone();
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let h = sorted[k - 1].max(1e-9);
+        // Efraimidis–Spirakis weighted sampling without replacement: key = u^(1/w),
+        // the k items with the largest keys are the proximity-weighted sample.
+        let mut keyed: Vec<(f64, f64)> = dists
+            .iter()
+            .map(|&d| {
+                let w = (-d / h).exp().max(1e-12);
+                let u: f64 = rng.random::<f64>().max(1e-12);
+                (u.powf(1.0 / w), d)
+            })
+            .collect();
+        keyed.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+        keyed.iter().take(k).map(|(_, d)| d).sum::<f64>() / k as f64
     }
 
     fn genetic_novelty(
@@ -170,8 +192,11 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> SoftStochastic<X, S> {
         knn: usize,
         genome: &X::Genome,
         skip: Option<usize>,
+        rng: &mut ChaCha8Rng,
     ) -> f64 {
-        Self::knn_mean(pool, knn, skip, |m| genetics.gene_dist(genome, &m.genome))
+        Self::weighted_knn(pool, knn, skip, rng, |m| {
+            genetics.gene_dist(genome, &m.genome)
+        })
     }
 
     fn behavioral_novelty(
@@ -179,8 +204,9 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> SoftStochastic<X, S> {
         knn: usize,
         score: &S,
         skip: Option<usize>,
+        rng: &mut ChaCha8Rng,
     ) -> f64 {
-        Self::knn_mean(pool, knn, skip, |m| score.behavior_dist(&m.score))
+        Self::weighted_knn(pool, knn, skip, rng, |m| score.behavior_dist(&m.score))
     }
 
     /// Recompute every member's cached novelty from scratch. O(pool²); called
@@ -195,13 +221,20 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> SoftStochastic<X, S> {
                     self.knn,
                     &self.pool[i].genome,
                     Some(i),
+                    &mut self.rng,
                 )
             })
             .collect();
         let b: Vec<f64> = (0..self.pool.len())
             .map(|i| {
                 if use_b {
-                    Self::behavioral_novelty(&self.pool, self.knn, &self.pool[i].score, Some(i))
+                    Self::behavioral_novelty(
+                        &self.pool,
+                        self.knn,
+                        &self.pool[i].score,
+                        Some(i),
+                        &mut self.rng,
+                    )
                 } else {
                     0.0
                 }
@@ -311,9 +344,16 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> EvolutionStrategy for SoftStocha
             self.best = Some((genome.clone(), score.clone()));
         }
         // Compute the new member's novelty against the current pool once, O(pool).
-        let gnovelty = Self::genetic_novelty(&self.genetics, &self.pool, self.knn, &genome, None);
+        let gnovelty = Self::genetic_novelty(
+            &self.genetics,
+            &self.pool,
+            self.knn,
+            &genome,
+            None,
+            &mut self.rng,
+        );
         let bnovelty = if self.behavior_weight > 0.0 {
-            Self::behavioral_novelty(&self.pool, self.knn, &score, None)
+            Self::behavioral_novelty(&self.pool, self.knn, &score, None, &mut self.rng)
         } else {
             0.0
         };
