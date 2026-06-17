@@ -16,6 +16,7 @@ plt.rcParams.update({
 
 CLASSIC = "#d1495b"   # red
 SSEA = "#2a9d8f"      # teal
+RESOURCE = "#e76f51"  # orange
 
 
 def load_csv(path):
@@ -203,15 +204,17 @@ if os.path.isdir("data/bench"):
         ssea = [best_cov(p, "ssea(") for p in probs]
         de = [best_cov(p, "de") for p in probs]
         spec = [best_cov(p, "speciated") for p in probs]
+        resource = [best_cov(p, "resource") for p in probs]
         x = np.arange(len(probs))
         fig, ax = plt.subplots(figsize=(13, 5))
-        ax.bar(x - 0.30, classic, 0.2, label="ClassicPopulation", color="#d1495b")
-        ax.bar(x - 0.10, de, 0.2, label="Differential Evolution", color="#e9c46a")
-        ax.bar(x + 0.10, ssea, 0.2, label="SoftStochastic (SSEA)", color="#2a9d8f")
-        ax.bar(x + 0.30, spec, 0.2, label="Speciated SSEA", color="#5e548e")
+        ax.bar(x - 0.32, classic, 0.15, label="ClassicPopulation", color="#d1495b")
+        ax.bar(x - 0.16, de, 0.15, label="Differential Evolution", color="#e9c46a")
+        ax.bar(x + 0.00, ssea, 0.15, label="SoftStochastic (SSEA)", color="#2a9d8f")
+        ax.bar(x + 0.16, spec, 0.15, label="Speciated SSEA", color="#5e548e")
+        ax.bar(x + 0.32, resource, 0.15, label="Resource (sharing)", color="#e76f51")
         ax.set_xticks(x); ax.set_xticklabels(probs, rotation=30, ha="right")
         ax.set_ylabel("basins covered (mean)")
-        ax.set_title("Basin coverage by strategy (SSEA finds all optima; DE/Classic converge to one)")
+        ax.set_title("Basin coverage by strategy (diversity-driven strategies find more optima)")
         ax.legend()
         fig.tight_layout()
         fig.savefig("charts/bench/coverage.png")
@@ -246,20 +249,22 @@ if os.path.isdir("data/bench"):
         plt.close(fig)
     print("wrote charts/bench/*_scatter.png")
 
-    # Two-circles: plain SSEA vs Speciated SSEA final pools (dead-zone thinning).
+    # Two-circles: SSEA vs Speciated vs Resource final pools (dead-zone band marked).
     tc_s = "data/bench/two_circles_ssea.csv"
     tc_p = "data/bench/two_circles_speciated.csv"
-    if os.path.exists(tc_s) and os.path.exists(tc_p):
+    tc_r = "data/bench/two_circles_resource.csv"
+    if os.path.exists(tc_s) and os.path.exists(tc_p) and os.path.exists(tc_r):
         def load_xy(path):
             with open(path) as f:
                 rows = list(csv.reader(f))
             return np.array([[float(r[0]), float(r[1])] for r in rows[1:]]) if len(rows) > 1 else np.empty((0, 2))
-        a, b = load_xy(tc_s), load_xy(tc_p)
+        a, b, c = load_xy(tc_s), load_xy(tc_p), load_xy(tc_r)
         th = np.linspace(0, 2 * np.pi, 200)
-        fig, axes = plt.subplots(1, 2, figsize=(12, 4.6), subplot_kw={"aspect": "equal"})
+        fig, axes = plt.subplots(1, 3, figsize=(16, 4.6), subplot_kw={"aspect": "equal"})
         for ax, data, title, col in [
-            (axes[0], a, "SoftStochastic (SSEA)", "#2a9d8f"),
+            (axes[0], a, "SoftStochastic (SSEA)", SSEA),
             (axes[1], b, "Speciated SSEA", "#5e548e"),
+            (axes[2], c, "Resource (fitness sharing)", RESOURCE),
         ]:
             for cx in (-5.0, 5.0):
                 ax.plot(cx + np.cos(th), np.sin(th), color="gray", ls="--", lw=1, alpha=0.6)
@@ -269,8 +274,28 @@ if os.path.isdir("data/bench"):
                 ax.scatter(data[:, 0], data[:, 1], s=10, c=col, alpha=0.7, edgecolors="none")
                 ax.set_title(f"{title}\n{betw*100:.0f}% stranded in the dead zone")
             ax.set_xlim(-7, 7); ax.set_ylim(-3, 3)
-        fig.suptitle("Two unit circles — assortative mating thins the between-basin population", y=1.02)
+        fig.suptitle("Two unit circles — diversity mechanisms and the between-basin dead zone", y=1.02)
         fig.tight_layout()
         fig.savefig("charts/bench/two_circles.png", bbox_inches="tight")
         plt.close(fig)
         print("wrote charts/bench/two_circles.png")
+
+    # Occupancy over time: Resource settles to a stable equilibrium; SSEA is noisier.
+    occ_path = "data/bench/two_circles_occupancy.csv"
+    if os.path.exists(occ_path):
+        hdr, od = load_csv(occ_path)
+        ci = {name: i for i, name in enumerate(hdr)}
+        t = od[:, ci["trials"]]
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.plot(t, od[:, ci["ssea_left"]], color=SSEA, lw=1.6, label="SSEA left ring")
+        ax.plot(t, od[:, ci["ssea_right"]], color=SSEA, lw=1.6, ls="--", label="SSEA right ring")
+        ax.plot(t, od[:, ci["resource_left"]], color=RESOURCE, lw=1.8, label="Resource left ring")
+        ax.plot(t, od[:, ci["resource_right"]], color=RESOURCE, lw=1.8, ls="--", label="Resource right ring")
+        ax.set_xlabel("evaluations (trials)")
+        ax.set_ylabel("pool members in each ring")
+        ax.set_title("Two-circles niche occupancy over time — Resource reaches a stable equilibrium")
+        ax.legend(fontsize=8, ncol=2)
+        fig.tight_layout()
+        fig.savefig("charts/bench/occupancy.png")
+        plt.close(fig)
+        print("wrote charts/bench/occupancy.png")
