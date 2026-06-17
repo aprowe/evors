@@ -1,2 +1,5 @@
 /target
 /data
+
+# Claude Code local workspace (agent worktrees, etc.)
+.claude/
