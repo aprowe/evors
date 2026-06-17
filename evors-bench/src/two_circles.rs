@@ -41,3 +41,13 @@ pub fn covers_both(pool: &[Vec<f64>]) -> bool {
     };
     on(true) && on(false)
 }
+
+/// Counts of pool members in the left ring (`x < -(C-1.5)`), the right ring
+/// (`x > C-1.5`), and the central dead zone (`|x| < GAP`). Positional only — no
+/// fitness gate — so it tracks where the population actually sits over time.
+pub fn occupancy(pool: &[Vec<f64>]) -> (usize, usize, usize) {
+    let left = pool.iter().filter(|x| x[0] < -(C - 1.5)).count();
+    let right = pool.iter().filter(|x| x[0] > C - 1.5).count();
+    let gap = pool.iter().filter(|x| x[0].abs() < GAP).count();
+    (left, right, gap)
+}
