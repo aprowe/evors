@@ -17,7 +17,7 @@ fn resource_reaches_stable_equilibrium() {
         ResourceSoftStochasticInfo {
             target: 300,
             temperature: 0.2,
-            relative_width: 0.05,
+            relative_width: 0.03,
             mate_locality: 2.0,
             seed: 1,
         },
@@ -44,14 +44,16 @@ fn resource_reaches_stable_equilibrium() {
 
     // Diversity: both rings covered, dead zone thinned.
     //
-    // Config: relative_width = 0.05, mate_locality = 2.0, temperature = 0.2,
-    // seed = 1. relative_width sets sigma = 0.05 x median pairwise gene_dist;
+    // Config: relative_width = 0.03, mate_locality = 2.0, temperature = 0.2,
+    // seed = 1. relative_width sets sigma = 0.03 x median pairwise gene_dist;
     // because the median is dominated by the ~10-unit cross-ring distance, a
     // larger multiplier (the original 0.15) gives a sigma so coarse it treats
-    // whole ring arcs as one niche and the population clumps. 0.05 resolves the
-    // within-ring scale, so members spread around each ring AND the gap stays
-    // thin. A ring-spread sweep confirmed 0.05/loc=2 maximizes angular coverage
-    // (~19/24 sectors over seeds 0..5) while keeping the gap low.
+    // whole ring arcs as one niche and the population clumps. A small multiplier
+    // resolves the within-ring scale, so members spread EVENLY around each ring
+    // AND the gap stays thin. A ring-evenness sweep (normalized angular entropy,
+    // 1.0 = uniform) confirmed smaller is more even: 0.05 -> 0.83, 0.03 -> 0.89
+    // (~22/24 sectors), strictly beating SSEA (0.81) and Speciated (0.67, which
+    // clumps because assortative mating concentrates breeding within clusters).
     //
     // The dead zone gate is positional (`|x| < GAP = 3.0`) with no fitness
     // filter, so it always catches the ~5% pure-random genomes the strategy

@@ -90,7 +90,7 @@ fn main() {
         ResourceSoftStochasticInfo {
             target: 300,
             temperature: 0.2,
-            relative_width: 0.05,
+            relative_width: 0.03,
             mate_locality: 2.0,
             seed: 1,
         },

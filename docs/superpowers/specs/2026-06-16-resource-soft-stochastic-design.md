@@ -91,18 +91,27 @@ instantaneous it converges rather than oscillates.
    large, to keep cost bounded; over the default `target = 300` the full O(n²) is
    fine and matches SSEA's existing novelty-refresh cost.
 
-   **Tuning note (relative_width must be small).** Because the median is dominated
-   by *cross-niche* distance, `relative_width` should sit around **0.05–0.1**, not
-   the higher values a naïve reading suggests. At `0.15` σ is so coarse it treats
-   whole ring arcs as a single niche and the population *clumps* on each ring
-   (a ring-spread sweep showed ~14/24 angular sectors covered, between-fraction
-   ~0.18). At `relative_width = 0.05, mate_locality = 2` it resolves the
-   within-ring scale: ~20/24 sectors, even angular spread, and the dead zone
-   drops to ~0.02–0.07 — strictly better than SSEA (16% gap) on *both* spread and
-   gap. The tuned demo/test point is therefore `relative_width = 0.05,
-   mate_locality = 2.0, temperature = 0.2`. A lower temperature concentrates the
-   pool more tightly *on* the ring but trades away angular coverage (sharing
-   collapses into fewer, wider-separated niches), so 0.2 is kept.
+   **Tuning note (relative_width must be small — it controls evenness).** Because
+   the median is dominated by *cross-niche* distance, `relative_width` should sit
+   around **0.03–0.05**, not the higher values a naïve reading suggests, and
+   *smaller = more even* spread within each niche. Measured by normalized angular
+   entropy on the two rings (1.0 = perfectly uniform around the ring):
+
+   | relative_width | evenness | angular sectors | dead-zone gap |
+   |---|---|---|---|
+   | 0.15 (clumps) | ~0.72 | ~14/24 | ~0.18 |
+   | 0.05 | 0.83 | ~20/24 | ~0.05 |
+   | **0.03 (tuned)** | **0.89** | **~22/24** | **~0.02** |
+
+   For reference, plain SSEA scores ~0.81 evenness (its kNN novelty *saturates* —
+   only the k nearest neighbours count, so a dense clump of >k looks no less novel
+   than exactly k), and SpeciatedSSEA only ~0.67 (assortative mating actively
+   concentrates breeding inside clusters). Crowding sums *every* neighbour within
+   σ, so it penalises density directly and spreads most evenly. The tuned
+   demo/test point is `relative_width = 0.03, mate_locality = 2.0,
+   temperature = 0.2`. A lower temperature concentrates the pool more tightly *on*
+   the ring radius but trades away angular evenness (sharing collapses into fewer,
+   wider-separated niches), so 0.2 is kept.
 
 ### Caching / refresh cadence
 
