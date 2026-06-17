@@ -260,6 +260,7 @@ pub fn default_configs() -> Vec<Config> {
                 relative_width: rw,
                 mate_locality: loc,
                 seed: 0,
+                ..Default::default()
             }),
             mutation_step: 0.3,
         });

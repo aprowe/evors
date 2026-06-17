@@ -20,6 +20,7 @@ fn resource_reaches_stable_equilibrium() {
             relative_width: 0.03,
             mate_locality: 2.0,
             seed: 1,
+            ..Default::default()
         },
     );
 
@@ -112,6 +113,7 @@ fn resource_solves_sphere() {
             relative_width: 0.15,
             mate_locality: 2.0,
             seed: 0,
+            ..Default::default()
         }),
         mutation_step: 0.3,
     };

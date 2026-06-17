@@ -74,6 +74,7 @@ fn main() {
             relative_width: 0.03,
             mate_locality: 2.0,
             seed: 1,
+            ..Default::default()
         },
     );
     probe("Resource (soft-equilibrium cull)", || {

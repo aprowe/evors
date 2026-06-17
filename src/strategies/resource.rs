@@ -18,6 +18,16 @@ pub struct ResourceSoftStochasticInfo {
     /// Assortative-mating locality: how strongly crossover prefers a mate close
     /// (by `gene_dist`) to the first parent. 0 = no bias (unbiased selection).
     pub mate_locality: f64,
+    /// Floor on the random-injection rate. `p_random = (1 − pool/target)` clamped
+    /// to `[explore_floor, 0.9]`. With the soft cull the pool stays near target so
+    /// `p_random` sits at this floor; raising it restores exploration (multi-basin
+    /// coverage) at the cost of more off-optimum members. Default 0.05.
+    pub explore_floor: f64,
+    /// Exponent on the cull's size pressure: death `∝ (size/target)^cull_pressure`.
+    /// 1.0 = linear (the baseline soft equilibrium); higher holds the pool more
+    /// tightly to target (steeper restoring force). Always `1/target` per member
+    /// exactly at `size = target` regardless of this value. Default 1.0.
+    pub cull_pressure: f64,
     pub seed: u64,
 }
 
@@ -28,6 +38,8 @@ impl Default for ResourceSoftStochasticInfo {
             temperature: 0.2,
             relative_width: 0.08,
             mate_locality: 2.0,
+            explore_floor: 0.05,
+            cull_pressure: 1.0,
             seed: 0,
         }
     }
@@ -61,6 +73,8 @@ pub struct ResourceSoftStochastic<X: Genetic, S> {
     temperature: f64,
     relative_width: f64,
     mate_locality: f64,
+    explore_floor: f64,
+    cull_pressure: f64,
     /// Current sharing radius; recomputed each refresh from the pool's spread.
     sigma: f64,
     pool: Vec<Member<X::Genome>>,
@@ -79,6 +93,8 @@ impl<X: Genetic, S: Fitness + Clone> ResourceSoftStochastic<X, S> {
             temperature: info.temperature.max(1e-6),
             relative_width: info.relative_width.max(1e-6),
             mate_locality: info.mate_locality.max(0.0),
+            explore_floor: info.explore_floor.clamp(0.0, 0.9),
+            cull_pressure: info.cull_pressure.max(0.1),
             sigma: 1e-6,
             pool: Vec::new(),
             best: None,
@@ -300,7 +316,7 @@ impl<X: Genetic, S: Fitness + Clone> ResourceSoftStochastic<X, S> {
         if n == 0 {
             return;
         }
-        let target_sq = (self.target as f64) * (self.target as f64);
+        let target = self.target as f64;
 
         // Normalized realized fitness → badness (1 = worst, 0 = best), centered
         // so the mean is 1 (equal scores ⇒ every badness = 1).
@@ -335,7 +351,9 @@ impl<X: Genetic, S: Fitness + Clone> ResourceSoftStochastic<X, S> {
         let mut dead = vec![false; n];
         let mut size = n as f64;
         for &i in &idx {
-            let base = size / target_sq;
+            // death ∝ (size/target)^cull_pressure / target — equals 1/target per
+            // member exactly at size==target for any exponent.
+            let base = (size / target).powf(self.cull_pressure) / target;
             let death_prob = (base * (badness[i] / mean_bad)).clamp(0.0, 1.0);
             if self.rng.random_bool(death_prob) {
                 dead[i] = true;
@@ -363,7 +381,7 @@ impl<X: Genetic, S: Fitness + Clone> EvolutionStrategy for ResourceSoftStochasti
             return self.genetics.random(&mut self.rng);
         }
         let ratio = self.pool.len() as f64 / self.target as f64;
-        let p_random = (1.0 - ratio).clamp(0.05, 0.9);
+        let p_random = (1.0 - ratio).clamp(self.explore_floor, 0.9);
         if self.rng.random_bool(p_random) {
             return self.genetics.random(&mut self.rng);
         }

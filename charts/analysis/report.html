@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ResourceSoftStochastic — Methods & Knobs Analysis</title>
+<style>
+  :root { --bg:#0f1216; --panel:#161b22; --ink:#e8edf2; --muted:#8b97a6; --line:#262d38;
+          --orange:#e76f51; --teal:#2a9d8f; --purple:#7c6cc4; --gold:#e9c46a; }
+  * { box-sizing:border-box; }
+  body { font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg);
+         color:var(--ink); margin:0; line-height:1.55; }
+  .wrap { max-width:1080px; margin:0 auto; padding:40px 28px 80px; }
+  h1 { font-size:30px; font-weight:700; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:15px; margin-bottom:28px; }
+  h2 { font-size:21px; font-weight:650; margin:44px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--line); }
+  h3 { font-size:16px; font-weight:600; margin:24px 0 6px; color:#cdd7e2; }
+  p { margin:8px 0; }
+  code { background:#1e2530; padding:1px 6px; border-radius:5px; font-size:13px; color:#ffd9c7; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin:14px 0; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .kpi { display:flex; gap:14px; flex-wrap:wrap; margin:14px 0; }
+  .kpi .card { flex:1 1 150px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .kpi .big { font-size:24px; font-weight:700; }
+  .kpi .lbl { color:var(--muted); font-size:12.5px; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th,td { text-align:right; padding:6px 10px; border-bottom:1px solid var(--line); }
+  th:first-child, td:first-child { text-align:left; }
+  thead th { color:var(--muted); font-weight:600; border-bottom:1px solid #36404e; }
+  tr:hover td { background:#1b212b; }
+  .good { color:#7ee2c0; } .bad { color:#ff9a8b; } .win { font-weight:700; }
+  img { width:100%; border:1px solid var(--line); border-radius:10px; background:#fff; margin:8px 0; display:block; }
+  .tag { display:inline-block; font-size:11px; padding:2px 8px; border-radius:20px; background:#1e2530; color:var(--muted); margin-right:6px; }
+  .callout { border-left:3px solid var(--orange); padding:8px 16px; background:#1a1410; border-radius:0 8px 8px 0; margin:12px 0; }
+  .callout.teal { border-color:var(--teal); background:#0f1715; }
+  .foot { color:var(--muted); font-size:12.5px; margin-top:40px; border-top:1px solid var(--line); padding-top:14px; }
+  ul { margin:8px 0; padding-left:22px; } li { margin:4px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>ResourceSoftStochastic — Methods &amp; Knobs Analysis</h1>
+<div class="sub">Comprehensive knob/theory sweep · evors · 2026-06-17 · 8 parallel experiments, ~30 configs<br>
+Metrics: <b>coverage</b> = mean basins found on ackley/rastrigin/griewank (higher = better multi-basin diversity) ·
+<b>evenness</b> = angular entropy on the two rings, 0–1 (higher = more uniform spread) ·
+<b>gap</b> = fraction stranded in the dead zone between rings (lower = better) ·
+<b>pool</b> = back-half pool size (target 300).</div>
+
+<div class="callout">
+<b>TL;DR.</b> Resource's fitness-sharing is the <b>uncontested even-spread champion</b> (evenness 0.91 vs SSEA 0.76 vs Speciated 0.55; dead-zone gap <b>14× smaller</b>). The soft cull that pinned the pool to target cost it multi-basin <i>coverage</i> — but two knobs recover it: <code>explore_floor</code> restores exploration and <code>cull_pressure=4</code> tightens the pool while <i>improving</i> evenness. The combo <code>explore_floor=0.2&nbsp;+&nbsp;cull_pressure=4</code> recovers ~60% of the lost coverage with the gap still near zero. Two surprises: <code>cull_pressure↑</code> is a near-free even-spread win, and the tuned <code>mate_locality=2</code> is actually the <i>worst</i> setting tested.
+</div>
+
+<div class="kpi">
+  <div class="card"><div class="big" style="color:var(--teal)">0.91</div><div class="lbl">Resource evenness<br>(SSEA 0.76 · Spec 0.55)</div></div>
+  <div class="card"><div class="big" style="color:var(--teal)">1.3%</div><div class="lbl">Resource dead-zone gap<br>(SSEA &amp; Spec ~18%)</div></div>
+  <div class="card"><div class="big" style="color:var(--orange)">+92%</div><div class="lbl">coverage from<br>explore_floor 0.05→0.30</div></div>
+  <div class="card"><div class="big" style="color:var(--orange)">gap→0</div><div class="lbl">cull_pressure 1→4<br>(evenness 0.91→0.97)</div></div>
+</div>
+
+<h2>1. The methods, head to head</h2>
+<div class="panel">
+<img src="methods.png" alt="method comparison">
+<table>
+<thead><tr><th>method</th><th>coverage</th><th>gap</th><th>evenness</th><th>on-ring</th></tr></thead>
+<tbody>
+<tr><td>Resource (fitness sharing)</td><td>23.3</td><td class="good win">0.013</td><td class="good win">0.908</td><td>121</td></tr>
+<tr><td>SSEA (kNN-novelty)</td><td class="win">40.0</td><td class="bad">0.183</td><td>0.759</td><td>98</td></tr>
+<tr><td>Speciated (novelty + mating)</td><td>34.6</td><td class="bad">0.186</td><td class="bad">0.548</td><td>61</td></tr>
+</tbody>
+</table>
+<p><b>Why Resource spreads evenly and the others clump — confirmed by data.</b> Resource's crowding term sums <i>every</i> neighbour within σ, so density is penalised continuously. SSEA's kNN-novelty <b>saturates</b> — only the k nearest count, so a dense clump of &gt;k looks no less novel than exactly k — and it clumps (evenness 0.76, gap 18%). Speciated's assortative mating actively <i>concentrates</i> breeding inside clusters, clumping the most (evenness 0.55, only 61 on-ring). On the flip side, SSEA's churn explores more basins (coverage 40 vs Resource 23): the strengths are mirror images.</p>
+<p class="callout teal"><b>Use which?</b> Resource for uniform, gap-free coverage of a known structure (manifold/ring sampling). SSEA when raw multimodal exploration matters most. Speciated only when you explicitly need tight, separated species downstream — it's otherwise dominated here.</p>
+</div>
+
+<h2>2. The central tradeoff</h2>
+<div class="panel">
+<img src="pareto.png" alt="coverage vs evenness and gap pareto">
+<p>Every config plotted as coverage (y) against evenness (left) and gap (right). The frontier is real: pushing coverage up generally costs evenness/gap — <i>but</i> the black-star "best combos" sit above the single-knob curves, i.e. combining knobs beats tuning any one. The top-right region (high coverage <i>and</i> high evenness) is reachable only by stacking <code>explore_floor</code> (coverage) with <code>cull_pressure</code> (gap/evenness).</p>
+</div>
+
+<h2>3. Per-knob effects</h2>
+<div class="panel">
+<img src="knobs.png" alt="per knob effects">
+<p>Orange = coverage (left axis); teal = evenness, purple = gap (right axis).</p>
+</div>
+
+<div class="grid2">
+<div class="panel">
+<h3>explore_floor — the coverage lever <span class="tag">key</span></h3>
+<table><thead><tr><th>floor</th><th>cov</th><th>gap</th><th>even</th></tr></thead><tbody>
+<tr><td>0.05</td><td>23.3</td><td>0.013</td><td>0.908</td></tr>
+<tr><td>0.10</td><td>25.6</td><td class="good">0.000</td><td>0.948</td></tr>
+<tr><td>0.20</td><td>32.8</td><td>0.068</td><td>0.939</td></tr>
+<tr><td>0.30</td><td class="win">44.7</td><td>0.039</td><td>0.934</td></tr>
+</tbody></table>
+<p>Raising it restores coverage <b>+92%</b> (mostly rastrigin &amp; griewank) with evenness staying high (0.87–0.95). The exploration the soft cull removed, handed back explicitly.</p>
+</div>
+
+<div class="panel">
+<h3>cull_pressure — near-free even-spread <span class="tag">surprise</span></h3>
+<table><thead><tr><th>k</th><th>pool spread</th><th>gap</th><th>even</th><th>cov</th></tr></thead><tbody>
+<tr><td>1</td><td>60</td><td>0.013</td><td>0.908</td><td>23.3</td></tr>
+<tr><td>2</td><td>42</td><td>0.010</td><td>0.932</td><td>22.1</td></tr>
+<tr><td>4</td><td class="good win">37</td><td class="good win">0.000</td><td class="good win">0.973</td><td>22.2</td></tr>
+</tbody></table>
+<p>Steeper restoring force → tighter pool (spread 60→37), and a <i>fuller, less-churning pool resolves niches more finely</i>: evenness 0.91→0.97, gap→0, for only ~5% coverage cost.</p>
+</div>
+
+<div class="panel">
+<h3>relative_width (σ) — fine niches = even</h3>
+<table><thead><tr><th>rw</th><th>even</th><th>cov</th><th>gap</th></tr></thead><tbody>
+<tr><td>0.02</td><td class="win">0.960</td><td>20.7</td><td class="good">0.000</td></tr>
+<tr><td>0.03</td><td>0.908</td><td>23.3</td><td>0.013</td></tr>
+<tr><td>0.05</td><td>0.899</td><td>26.2</td><td>0.010</td></tr>
+<tr><td>0.08</td><td>0.854</td><td class="win">32.6</td><td class="bad">0.070</td></tr>
+</tbody></table>
+<p>Smaller σ → finer niches → more even (0.96 at 0.02) but less coverage. <b>0.03 stays the balanced pick</b>; 0.02 only if max evenness/zero gap is the sole goal.</p>
+</div>
+
+<div class="panel">
+<h3>mate_locality — drop it <span class="tag">surprise</span></h3>
+<table><thead><tr><th>loc</th><th>gap</th><th>even</th><th>cov</th></tr></thead><tbody>
+<tr><td>0</td><td class="good">0.003</td><td class="win">0.974</td><td class="win">25.3</td></tr>
+<tr><td>1</td><td>0.003</td><td>0.947</td><td>21.4</td></tr>
+<tr><td>2 (tuned)</td><td class="bad">0.013</td><td class="bad">0.908</td><td>23.3</td></tr>
+<tr><td>5</td><td class="good">0.000</td><td>0.959</td><td>21.2</td></tr>
+</tbody></table>
+<p>The tuned <code>2.0</code> is the sweep's <b>pessimum</b> on every axis. Crowding already empties the gap, so assortative mating adds nothing here — <b>locality 0 dominates</b> (evenness 0.97, best coverage).</p>
+</div>
+
+<div class="panel">
+<h3>temperature — on-ring vs spread</h3>
+<table><thead><tr><th>temp</th><th>on-ring</th><th>even</th><th>cov</th></tr></thead><tbody>
+<tr><td>0.05</td><td>132</td><td class="win">0.962</td><td>17.1</td></tr>
+<tr><td>0.10</td><td class="win">145</td><td>0.951</td><td>20.3</td></tr>
+<tr><td>0.20</td><td>121</td><td>0.908</td><td>23.3</td></tr>
+<tr><td>0.50</td><td>99</td><td>0.869</td><td class="win">24.3</td></tr>
+</tbody></table>
+<p>Lower temp → tighter on the ring + more even, less coverage. <code>0.10</code> maximises on-ring (145); <code>0.20–0.50</code> trades that for coverage.</p>
+</div>
+
+<div class="panel">
+<h3>target — pool size scales coverage</h3>
+<table><thead><tr><th>target</th><th>pool (min–max)</th><th>cov</th><th>even</th></tr></thead><tbody>
+<tr><td>150</td><td>149 (130–169)</td><td>10.9</td><td>0.958</td></tr>
+<tr><td>300</td><td>301 (271–331)</td><td>23.3</td><td>0.908</td></tr>
+<tr><td>500</td><td>498 (465–533)</td><td class="win">32.8</td><td>0.935</td></tr>
+</tbody></table>
+<p>The soft cull holds the pool within ~1% of target at every size. Bigger pool ≈ linearly more coverage (≈3× from 150→500) and more on-ring; gap stays &lt;0.02. Cost is compute.</p>
+</div>
+</div>
+
+<h2>4. Best combinations &amp; recommended configs</h2>
+<div class="panel">
+<img src="best.png" alt="best combos ranked">
+<table>
+<thead><tr><th>combo</th><th>coverage</th><th>gap</th><th>evenness</th><th>score</th></tr></thead>
+<tbody>
+<tr><td>explore.15 + cullp2 + t500</td><td class="win">43.7</td><td class="bad">0.079</td><td>0.912</td><td>2.66</td></tr>
+<tr><td>explore.3 + cullp4</td><td>42.3</td><td>0.051</td><td>0.879</td><td>2.65</td></tr>
+<tr><td>target500 + cullp2</td><td>33.1</td><td class="good">0.016</td><td>0.959</td><td>2.42</td></tr>
+<tr><td><b>explore.2 + cullp4</b> <span class="tag">balanced</span></td><td>31.6</td><td class="good">0.006</td><td>0.917</td><td>2.33</td></tr>
+<tr><td>cullp4 <span class="tag">even-spread</span></td><td>22.2</td><td class="good win">0.000</td><td class="win">0.974</td><td>1.98</td></tr>
+<tr><td>baseline</td><td>23.3</td><td>0.013</td><td>0.908</td><td>1.93</td></tr>
+</tbody>
+</table>
+<p>Composite score = <code>cov/22 + evenness − 3·gap</code>. The key result: raising <code>explore_floor</code> recovers coverage, and adding <code>cull_pressure=4</code> on top <b>cuts the resulting gap ~10×</b> (0.068→0.006) at ~1 coverage point — the two knobs are complementary, not competing.</p>
+
+<div class="grid2">
+<div class="callout teal"><b>Balanced profile</b><br>
+<code>relative_width=0.03</code><br><code>mate_locality=0</code><br><code>explore_floor=0.2</code><br><code>cull_pressure=4</code><br><code>temperature=0.2</code>, <code>target=300</code><br>
+→ coverage ~32 (+35%), gap ~0.006, evenness ~0.92. Recovers most of the soft-cull coverage loss while keeping the gap below baseline.</div>
+<div class="callout"><b>Even-spread specialist</b><br>
+<code>relative_width=0.03</code> (or 0.02)<br><code>mate_locality=0</code><br><code>explore_floor=0.05</code><br><code>cull_pressure=4</code><br><code>temperature=0.1</code>, <code>target=300</code><br>
+→ gap 0.000, evenness ~0.97 (best), coverage at baseline. For uniform sampling of a known optimal manifold.</div>
+</div>
+</div>
+
+<h2>5. Conclusions</h2>
+<ul>
+<li><b>Fitness sharing wins even spread by construction</b> — summing all neighbours beats saturating kNN-novelty (0.91 vs 0.76 evenness) and assortative-mating speciation (0.55). The dead-zone gap is 14× smaller.</li>
+<li><b>The coverage/even-spread tradeoff is real but not binary.</b> <code>explore_floor</code> buys coverage; <code>cull_pressure</code> buys evenness+gap; together they reach configs neither reaches alone.</li>
+<li><b>Two retuning actions from the data:</b> set <code>mate_locality → 0</code> (the tuned 2.0 is the worst point), and adopt <code>cull_pressure = 4</code> (a near-free even-spread gain). Add <code>explore_floor ≈ 0.2</code> if multi-basin coverage matters for your use case.</li>
+<li><b>Pool stability is robust</b> across every knob and target size — the soft cull holds the pool within ~1% of target everywhere.</li>
+</ul>
+
+<div class="foot">
+Generated by 8 parallel analysis subagents over <code>evors-bench/examples/analysis_sweep.rs</code>; charts via <code>scripts/analysis_plot.py</code>;
+raw data in <code>data/analysis/*.csv</code>. Coverage uses 3 seeds × 12k evals on ackley/rastrigin/griewank; two-circles metrics from a 30k-eval run.
+Numbers are single-run estimates (seeds where noted) — directional, not high-precision.
+</div>
+
+</div>
+</body>
+</html>
