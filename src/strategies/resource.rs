@@ -45,6 +45,56 @@ impl Default for ResourceSoftStochasticInfo {
     }
 }
 
+/// Tuned presets from the 2026-06-17 knob analysis (`charts/analysis/report.html`).
+/// Each returns a config with `seed: 0`; override via struct-update, e.g.
+/// `ResourceSoftStochasticInfo { seed: 7, ..ResourceSoftStochasticInfo::balanced() }`.
+impl ResourceSoftStochasticInfo {
+    /// **Balanced** — recovers most multi-basin coverage while keeping the
+    /// dead-zone gap near zero. The all-round recommendation: `explore_floor`
+    /// restores exploration, `cull_pressure = 4` keeps the spread even.
+    /// (~+35% coverage vs the even-spread preset, gap ≈ 0.006, evenness ≈ 0.92.)
+    pub fn balanced() -> Self {
+        Self {
+            target: 300,
+            temperature: 0.2,
+            relative_width: 0.03,
+            mate_locality: 0.0,
+            explore_floor: 0.2,
+            cull_pressure: 4.0,
+            seed: 0,
+        }
+    }
+
+    /// **Even-spread specialist** — maximal uniform coverage of a known optimal
+    /// manifold (evenness ≈ 0.97, gap ≈ 0), at baseline multi-basin coverage.
+    /// Use when you want a gap-free, uniform sampling of the optimum set.
+    pub fn even_spread() -> Self {
+        Self {
+            target: 300,
+            temperature: 0.1,
+            relative_width: 0.03,
+            mate_locality: 0.0,
+            explore_floor: 0.05,
+            cull_pressure: 4.0,
+            seed: 0,
+        }
+    }
+
+    /// **Coverage-first** — a larger pool plus more exploration for maximum basin
+    /// discovery (still gap-light). Heavier compute (target 500).
+    pub fn coverage() -> Self {
+        Self {
+            target: 500,
+            temperature: 0.2,
+            relative_width: 0.03,
+            mate_locality: 0.0,
+            explore_floor: 0.15,
+            cull_pressure: 2.0,
+            seed: 0,
+        }
+    }
+}
+
 struct Member<G> {
     genome: G,
     fitness: f64,
@@ -547,5 +597,30 @@ mod tests {
         };
         let out = run(&cfg, &mut strat, |x: &f64| *x);
         assert!(out.best_score.unwrap() > 0.8, "got {:?}", out.best_score);
+    }
+
+    #[test]
+    fn presets_are_valid_and_optimize() {
+        for info in [
+            ResourceSoftStochasticInfo::balanced(),
+            ResourceSoftStochasticInfo::even_spread(),
+            ResourceSoftStochasticInfo::coverage(),
+        ] {
+            let mut strat: ResourceSoftStochastic<UnitGenetics, f64> = ResourceSoftStochastic::new(
+                UnitGenetics,
+                ResourceSoftStochasticInfo { seed: 3, ..info },
+            );
+            let cfg = RunConfig {
+                stop: Stop::Trials(500),
+                batch_size: 1,
+                max_trials: None,
+            };
+            let out = run(&cfg, &mut strat, |x: &f64| *x);
+            assert!(
+                out.best_score.unwrap() > 0.8,
+                "preset failed: {:?}",
+                out.best_score
+            );
+        }
     }
 }

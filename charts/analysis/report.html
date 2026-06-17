@@ -29,6 +29,7 @@
   thead th { color:var(--muted); font-weight:600; border-bottom:1px solid #36404e; }
   tr:hover td { background:#1b212b; }
   .good { color:#7ee2c0; } .bad { color:#ff9a8b; } .win { font-weight:700; }
+  .muted { color:var(--muted); }
   img { width:100%; border:1px solid var(--line); border-radius:10px; background:#fff; margin:8px 0; display:block; }
   .tag { display:inline-block; font-size:11px; padding:2px 8px; border-radius:20px; background:#1e2530; color:var(--muted); margin-right:6px; }
   .callout { border-left:3px solid var(--orange); padding:8px 16px; background:#1a1410; border-radius:0 8px 8px 0; margin:12px 0; }
@@ -80,6 +81,23 @@ Metrics: <b>coverage</b> = mean basins found on ackley/rastrigin/griewank (highe
 </div>
 
 <h2>3. Per-knob effects</h2>
+
+<div class="panel">
+<h3>Knob cheat-sheet — what each one does to the output</h3>
+<table>
+<thead><tr><th>knob</th><th>what it controls</th><th>raising it →</th><th>best lever for</th><th>recommended</th></tr></thead>
+<tbody>
+<tr><td><code>target</code></td><td>pool size (carrying capacity)</td><td>more coverage &amp; more on-ring, ≈linear; the soft cull still holds the pool to ±1%</td><td>coverage</td><td>300 <span class="muted">(500 coverage-first)</span></td></tr>
+<tr><td><code>relative_width</code> (σ)</td><td>sharing radius = niche width</td><td>coarser niches → <span class="bad">less even</span>, <span class="good">more coverage</span> &amp; bigger gap; lowering it → finer, <span class="good">more even spread</span></td><td>even spread (keep low)</td><td>0.03 <span class="muted">(0.02 max-even)</span></td></tr>
+<tr><td><code>temperature</code></td><td>Boltzmann selection sharpness</td><td>softer selection → <span class="good">more coverage</span>, but <span class="bad">fewer on-ring &amp; less even</span>; lowering → tighter on the ring + more even</td><td>on-ring concentration (keep low)</td><td>0.1–0.2</td></tr>
+<tr><td><code>mate_locality</code></td><td>assortative-mating strength</td><td>no benefit here — crowding already empties the gap; <code>2.0</code> is the <span class="bad">worst</span> point tested</td><td>— (leave off)</td><td>0</td></tr>
+<tr><td><code>explore_floor</code></td><td>floor on random injection</td><td><span class="good">large coverage gain</span> (+92% at 0.30) for a small gap cost — the lever that undoes the soft cull's exploitation</td><td>coverage recovery</td><td>0.2 <span class="muted">(balanced)</span></td></tr>
+<tr><td><code>cull_pressure</code></td><td>pool-tightness exponent</td><td>tighter, less-churning pool → <span class="good">more even, gap→0</span>, for ~5% coverage cost — a near-free even-spread win</td><td>even spread (near-free)</td><td>4</td></tr>
+</tbody>
+</table>
+<p class="muted" style="font-size:12.5px">Rule of thumb: <code>target</code> + <code>explore_floor</code> push <b>coverage</b>; <code>relative_width↓</code>, <code>temperature↓</code>, <code>cull_pressure↑</code> push <b>even spread</b>; <code>mate_locality</code> does nothing useful on this landscape.</p>
+</div>
+
 <div class="panel">
 <img src="knobs.png" alt="per knob effects">
 <p>Orange = coverage (left axis); teal = evenness, purple = gap (right axis).</p>
@@ -168,13 +186,14 @@ Metrics: <b>coverage</b> = mean basins found on ackley/rastrigin/griewank (highe
 <p>Composite score = <code>cov/22 + evenness − 3·gap</code>. The key result: raising <code>explore_floor</code> recovers coverage, and adding <code>cull_pressure=4</code> on top <b>cuts the resulting gap ~10×</b> (0.068→0.006) at ~1 coverage point — the two knobs are complementary, not competing.</p>
 
 <div class="grid2">
-<div class="callout teal"><b>Balanced profile</b><br>
+<div class="callout teal"><b>Balanced profile</b> &nbsp;<span class="tag">ResourceSoftStochasticInfo::balanced()</span><br>
 <code>relative_width=0.03</code><br><code>mate_locality=0</code><br><code>explore_floor=0.2</code><br><code>cull_pressure=4</code><br><code>temperature=0.2</code>, <code>target=300</code><br>
 → coverage ~32 (+35%), gap ~0.006, evenness ~0.92. Recovers most of the soft-cull coverage loss while keeping the gap below baseline.</div>
-<div class="callout"><b>Even-spread specialist</b><br>
+<div class="callout"><b>Even-spread specialist</b> &nbsp;<span class="tag">ResourceSoftStochasticInfo::even_spread()</span><br>
 <code>relative_width=0.03</code> (or 0.02)<br><code>mate_locality=0</code><br><code>explore_floor=0.05</code><br><code>cull_pressure=4</code><br><code>temperature=0.1</code>, <code>target=300</code><br>
 → gap 0.000, evenness ~0.97 (best), coverage at baseline. For uniform sampling of a known optimal manifold.</div>
 </div>
+<p class="muted" style="font-size:12.5px;margin-top:10px">All three profiles ship as presets on the CreateInfo: <code>ResourceSoftStochasticInfo::balanced()</code>, <code>::even_spread()</code>, <code>::coverage()</code> (a larger-pool coverage-first profile). Override the seed with <code>{ seed, ..balanced() }</code>.</p>
 </div>
 
 <h2>5. Conclusions</h2>
