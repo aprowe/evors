@@ -2,7 +2,7 @@
 //! the benchmark coverage metric) can read members without branching per type.
 
 use crate::genetic::Genetic;
-use crate::strategies::{ClassicPopulation, SoftStochastic, SpeciatedSoftStochastic};
+use crate::strategies::{ClassicPopulation, ResourceSoftStochastic, SoftStochastic, SpeciatedSoftStochastic};
 use crate::strategy::{Behavior, Fitness};
 
 pub trait PopulationView {
@@ -19,6 +19,13 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> PopulationView for SoftStochasti
 }
 
 impl<X: Genetic, S: Fitness + Behavior + Clone> PopulationView for SpeciatedSoftStochastic<X, S> {
+    type Genome = X::Genome;
+    fn members(&self) -> Vec<X::Genome> {
+        self.pool_genomes()
+    }
+}
+
+impl<X: Genetic, S: Fitness + Clone> PopulationView for ResourceSoftStochastic<X, S> {
     type Genome = X::Genome;
     fn members(&self) -> Vec<X::Genome> {
         self.pool_genomes()
