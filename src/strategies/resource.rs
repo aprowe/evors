@@ -44,6 +44,10 @@ struct Member<G> {
 /// strictly positive even when every pool member shares the same raw fitness.
 const REALIZED_EPS: f64 = 1e-9;
 
+/// Cap on the number of pairwise distances sampled to estimate σ each refresh,
+/// so the refresh stays cheap even though it now fires on a steady cadence.
+const MAX_SIGMA_PAIRS: usize = 4000;
+
 /// Resource Soft Evolution Algorithm: the SSEA steady-state soft cull, but the
 /// survival/selection metric is **shared fitness** — positively-shifted raw
 /// fitness divided by crowding (instantaneous fitness sharing). Crowded regions
@@ -78,7 +82,10 @@ impl<X: Genetic, S: Fitness + Clone> ResourceSoftStochastic<X, S> {
             sigma: 1e-6,
             pool: Vec::new(),
             best: None,
-            refresh_interval: (info.target.max(2) / 8).max(4),
+            // The trickle cull fires ~every report, so the crowding cache would
+            // otherwise refresh far too often; the steady pool also goes stale
+            // slowly. Refresh roughly every half-pool-worth of reports.
+            refresh_interval: (info.target.max(2) / 2).max(8),
             since_refresh: 0,
         }
     }
@@ -115,18 +122,40 @@ impl<X: Genetic, S: Fitness + Clone> ResourceSoftStochastic<X, S> {
     }
 
     /// Sharing radius from the pool's own spread: `relative_width × median pairwise
-    /// gene_dist`. Returns a small positive floor when the pool is too small.
-    fn compute_sigma(genetics: &X, pool: &[Member<X::Genome>], relative_width: f64) -> f64 {
+    /// gene_dist`. Returns a small positive floor when the pool is too small. For
+    /// large pools the median is estimated from a random sample of up to
+    /// `MAX_SIGMA_PAIRS` pairs, so the per-refresh cost stays bounded.
+    fn compute_sigma(
+        genetics: &X,
+        pool: &[Member<X::Genome>],
+        relative_width: f64,
+        rng: &mut ChaCha8Rng,
+    ) -> f64 {
         let n = pool.len();
         if n < 2 {
             return 1e-6;
         }
-        let mut dists: Vec<f64> = Vec::with_capacity(n * (n - 1) / 2);
-        for i in 0..n {
-            for j in (i + 1)..n {
-                dists.push(genetics.gene_dist(&pool[i].genome, &pool[j].genome));
+        let full = n * (n - 1) / 2;
+        let mut dists: Vec<f64> = if full <= MAX_SIGMA_PAIRS {
+            let mut d = Vec::with_capacity(full);
+            for i in 0..n {
+                for j in (i + 1)..n {
+                    d.push(genetics.gene_dist(&pool[i].genome, &pool[j].genome));
+                }
             }
-        }
+            d
+        } else {
+            (0..MAX_SIGMA_PAIRS)
+                .map(|_| {
+                    let i = rng.random_range(0..n);
+                    let mut j = rng.random_range(0..n);
+                    while j == i {
+                        j = rng.random_range(0..n);
+                    }
+                    genetics.gene_dist(&pool[i].genome, &pool[j].genome)
+                })
+                .collect()
+        };
         dists.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let med = dists[dists.len() / 2];
         (relative_width * med).max(1e-6)
@@ -222,7 +251,12 @@ impl<X: Genetic, S: Fitness + Clone> ResourceSoftStochastic<X, S> {
     /// Recompute σ and every member's cached crowding from scratch. O(pool²);
     /// called only every `refresh_interval` culls to bound staleness.
     fn refresh_crowding(&mut self) {
-        let sigma = Self::compute_sigma(&self.genetics, &self.pool, self.relative_width);
+        let sigma = Self::compute_sigma(
+            &self.genetics,
+            &self.pool,
+            self.relative_width,
+            &mut self.rng,
+        );
         self.sigma = sigma;
         let c: Vec<f64> = (0..self.pool.len())
             .map(|i| {
@@ -240,42 +274,83 @@ impl<X: Genetic, S: Fitness + Clone> ResourceSoftStochastic<X, S> {
         }
     }
 
-    /// Soft cull, run from `report` when over capacity. Ranks survival by
-    /// normalized realized (shared) fitness so crowded members are culled first.
+    /// Soft cull, run from `report` every step. **No hard cap on pool size** — it
+    /// walks a shuffled pool once and each member dies with probability
+    /// `(current_size / target²) × badness_i`, where `badness` is mean-centered on
+    /// 1 (low realized fitness ⇒ above 1, high ⇒ below). `current_size` shrinks as
+    /// members are removed, so the death rate falls during the pass (each removal
+    /// makes the next survivor likelier).
+    ///
+    /// The `size / target²` factor is a soft equilibrium, not a cutoff: at
+    /// `size = 0` it is 0 (a tiny pool is never culled), at `size = target` it is
+    /// `1/target` per member (so ~one is removed, balancing the one just added),
+    /// and above target it rises so the expected removals (`size²/target²`) exceed
+    /// the inflow and the pool drifts back down. The pool therefore hovers around
+    /// `target` under a restoring force rather than being clamped to it. Badness
+    /// biases *which* members die toward the worst, not how many.
     fn soft_cull(&mut self) {
-        // Refresh on the first cull (since_refresh == 0) and every interval after,
-        // so σ/crowding are real from the start.
+        // Refresh σ/crowding on the first call and every interval after.
         if self.since_refresh == 0 || self.since_refresh >= self.refresh_interval {
             self.refresh_crowding();
             self.since_refresh = 0;
         }
         self.since_refresh += 1;
 
+        let n = self.pool.len();
+        if n == 0 {
+            return;
+        }
+        let target_sq = (self.target as f64) * (self.target as f64);
+
+        // Normalized realized fitness → badness (1 = worst, 0 = best), centered
+        // so the mean is 1 (equal scores ⇒ every badness = 1).
         let realized = self.realized_vec();
         let (min_r, max_r) = realized
             .iter()
             .fold((f64::MAX, f64::MIN), |(lo, hi), &r| (lo.min(r), hi.max(r)));
         let rspan = (max_r - min_r).max(1e-9);
-        let pressure = (self.pool.len() as f64 / self.target as f64).max(1e-3);
-        let best_fit = self.best.as_ref().map(|(_, s)| s.fitness());
+        let badness: Vec<f64> = realized.iter().map(|r| 1.0 - (r - min_r) / rspan).collect();
+        let mean_bad = (badness.iter().sum::<f64>() / n as f64).max(1e-9);
 
-        let drained: Vec<Member<X::Genome>> = std::mem::take(&mut self.pool);
-        let mut survivors: Vec<Member<X::Genome>> = Vec::with_capacity(drained.len());
-        let mut kept_best = false;
-        for (m, r) in drained.into_iter().zip(realized) {
-            // Keep exactly one copy of the global best unconditionally.
-            if !kept_best && best_fit.map_or(false, |bf| (m.fitness - bf).abs() < f64::EPSILON) {
-                kept_best = true;
-                survivors.push(m);
-                continue;
-            }
-            let norm = ((r - min_r) / rspan).clamp(0.0, 1.0);
-            let p_survive = norm.powf(pressure).clamp(0.0, 1.0);
-            if self.rng.random_bool(p_survive) {
-                survivors.push(m);
+        // Protect one copy of the global best from the cull.
+        let best_fit = self.best.as_ref().map(|(_, s)| s.fitness());
+        let mut protected = usize::MAX;
+        if let Some(bf) = best_fit {
+            for (i, m) in self.pool.iter().enumerate() {
+                if (m.fitness - bf).abs() < f64::EPSILON {
+                    protected = i;
+                    break;
+                }
             }
         }
-        self.pool = survivors;
+
+        // Removable indices, shuffled (Fisher–Yates) so there is no positional bias.
+        let mut idx: Vec<usize> = (0..n).filter(|&i| i != protected).collect();
+        for i in (1..idx.len()).rev() {
+            let j = self.rng.random_range(0..=i);
+            idx.swap(i, j);
+        }
+
+        // Soft-equilibrium pass: death prob (size/target²)·badness, size shrinking.
+        let mut dead = vec![false; n];
+        let mut size = n as f64;
+        for &i in &idx {
+            let base = size / target_sq;
+            let death_prob = (base * (badness[i] / mean_bad)).clamp(0.0, 1.0);
+            if self.rng.random_bool(death_prob) {
+                dead[i] = true;
+                size -= 1.0;
+            }
+        }
+
+        // Keep survivors in their original order.
+        let mut keep = Vec::with_capacity(n);
+        for (i, m) in std::mem::take(&mut self.pool).into_iter().enumerate() {
+            if !dead[i] {
+                keep.push(m);
+            }
+        }
+        self.pool = keep;
     }
 }
 
@@ -331,9 +406,9 @@ impl<X: Genetic, S: Fitness + Clone> EvolutionStrategy for ResourceSoftStochasti
             fitness: fit,
             crowding,
         });
-        if self.pool.len() > self.target {
-            self.soft_cull();
-        }
+        // The cull is a continuous soft process (no over-target gate): when the
+        // pool is below target its death probabilities taper toward zero anyway.
+        self.soft_cull();
     }
 
     fn best(&self) -> Option<(&X::Genome, &S)> {
@@ -376,9 +451,11 @@ mod tests {
         let g = UnitGenetics;
         let tight: Vec<Member<f64>> = [0.50, 0.51, 0.49, 0.50].into_iter().map(mk).collect();
         let spread: Vec<Member<f64>> = [0.0, 0.3, 0.6, 1.0].into_iter().map(mk).collect();
-        let s_tight = ResourceSoftStochastic::<UnitGenetics, f64>::compute_sigma(&g, &tight, 0.15);
+        let mut rng = ChaCha8Rng::seed_from_u64(0);
+        let s_tight =
+            ResourceSoftStochastic::<UnitGenetics, f64>::compute_sigma(&g, &tight, 0.15, &mut rng);
         let s_spread =
-            ResourceSoftStochastic::<UnitGenetics, f64>::compute_sigma(&g, &spread, 0.15);
+            ResourceSoftStochastic::<UnitGenetics, f64>::compute_sigma(&g, &spread, 0.15, &mut rng);
         assert!(
             s_spread > s_tight,
             "sigma should grow with spread: tight={s_tight} spread={s_spread}"

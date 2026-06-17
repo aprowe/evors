@@ -66,12 +66,40 @@ crowding(i)  = Σ_j  sh(gene_dist(i, j))      // over whole pool, includes self 
 sh(d)        = max(0, 1 − d/σ)               // triangular: hard radius ⇒ crisp niches
 ```
 
-The soft cull's Boltzmann survival weight becomes
-`exp((realized(i) − max_realized) / temperature)` — the same non-greedy
-steady-state cull, just fed shared fitness. More neighbors inside σ ⇒ higher
-crowding ⇒ resource split more ways ⇒ lower realized ⇒ the niche stops growing.
-That negative feedback **is** the per-niche carrying capacity, and because it is
+Shared fitness drives **which** members die; the cull (below) decides **how
+many**. More neighbors inside σ ⇒ higher crowding ⇒ resource split more ways ⇒
+lower realized ⇒ that member is likelier culled ⇒ the niche stops growing. That
+negative feedback **is** the per-niche carrying capacity, and because it is
 instantaneous it converges rather than oscillates.
+
+### The soft-equilibrium cull (no hard cap)
+
+Rather than only culling when the pool exceeds `target` (which fires rarely but
+removes ~half the pool in one shot, leaving a deep 135↔300 sawtooth), the cull
+runs **every report** as a continuous process with **no hard cap on pool size**.
+Each report walks a shuffled pool once; member `i` dies with probability
+
+```text
+death(i) = (size / target²) · badness(i)            // size shrinks as members die
+badness(i) = 1 − normalized_realized(i)             // mean-centered to 1
+```
+
+The `size / target²` factor is a soft equilibrium, not a cutoff:
+
+- `size → 0` ⇒ death → 0 (a small pool is never culled, so it grows);
+- `size = target` ⇒ death = `1/target` per member (≈ one removed, balancing the
+  one just added);
+- `size > target` ⇒ death rises, so expected removals `size²/target²` exceed the
+  inflow and the pool drifts back down.
+
+So the pool **hovers around `target` under a restoring force** (measured: mean
+~299, range ~270–335 at target 300, removing ~1.6/report) instead of being
+clamped or sawtoothing. `size` is recomputed as members are removed during the
+pass, so each removal lowers the next survivor's death odds. `badness`
+(mean-centered on 1) biases deaths toward the worst — least-fit, most-crowded —
+members **without changing the expected count**; with equal scores every badness
+is 1 and the cull is pure size-pressure. One copy of the global best is protected
+each pass.
 
 ### Two correctness details
 
@@ -115,10 +143,14 @@ instantaneous it converges rather than oscillates.
 
 ### Caching / refresh cadence
 
-Crowding (per pool member) and σ are cached and **bulk-refreshed every `target/8`
-culls**, exactly mirroring SSEA's novelty cache. Between refreshes, an incoming
-genome's crowding is computed against the current pool on insert (O(n)) so the
-negative feedback stays responsive; the periodic bulk refresh recomputes σ, the
+Crowding (per pool member) and σ are cached. Because the soft cull now runs every
+report, a per-cull refresh would fire far too often, so the bulk refresh is
+**every `target/2` reports**; the steady pool (≈1 member swapped per report) goes
+stale slowly, so this stays fresh enough. Between refreshes, an incoming genome's
+crowding is computed against the current pool on insert (O(n)) so the negative
+feedback stays responsive. To keep each refresh cheap at this cadence, σ's median
+is estimated from a random sample of up to `MAX_SIGMA_PAIRS` (4000) pairwise
+distances rather than the full O(n²) set; the bulk refresh recomputes σ, the
 positive shift, and all crowding values together.
 
 ### Mating — assortative / local
