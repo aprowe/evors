@@ -31,9 +31,8 @@ impl Default for ResourceSoftStochasticInfo {
     }
 }
 
-struct Member<G, S> {
+struct Member<G> {
     genome: G,
-    score: S,
     fitness: f64,
     /// Cached crowding: Σ_j sh(gene_dist(self, j)) over the pool (incl. self ⇒ ≥ 1).
     crowding: f64,
@@ -58,7 +57,7 @@ pub struct ResourceSoftStochastic<X: Genetic, S> {
     mate_locality: f64,
     /// Current sharing radius; recomputed each refresh from the pool's spread.
     sigma: f64,
-    pool: Vec<Member<X::Genome, S>>,
+    pool: Vec<Member<X::Genome>>,
     best: Option<(X::Genome, S)>,
     /// Bulk-refresh σ + all crowding every this many culls (amortizes O(pool²)).
     refresh_interval: usize,
@@ -115,7 +114,7 @@ impl<X: Genetic, S: Fitness + Clone> ResourceSoftStochastic<X, S> {
 
     /// Sharing radius from the pool's own spread: `relative_width × median pairwise
     /// gene_dist`. Returns a small positive floor when the pool is too small.
-    fn compute_sigma(genetics: &X, pool: &[Member<X::Genome, S>], relative_width: f64) -> f64 {
+    fn compute_sigma(genetics: &X, pool: &[Member<X::Genome>], relative_width: f64) -> f64 {
         let n = pool.len();
         if n < 2 {
             return 1e-6;
@@ -137,7 +136,7 @@ impl<X: Genetic, S: Fitness + Clone> ResourceSoftStochastic<X, S> {
     /// when recomputing crowding for an existing member.
     fn crowding_of(
         genetics: &X,
-        pool: &[Member<X::Genome, S>],
+        pool: &[Member<X::Genome>],
         sigma: f64,
         genome: &X::Genome,
         skip: Option<usize>,
@@ -187,7 +186,7 @@ impl<X: Genetic, S: Fitness + Clone> ResourceSoftStochastic<X, S> {
     /// Pick a mate for parent `a`: weight ∝ Boltzmann(realized) × exp(−locality·dist).
     fn mate_pick(
         genetics: &X,
-        pool: &[Member<X::Genome, S>],
+        pool: &[Member<X::Genome>],
         realized: &[f64],
         a: &X::Genome,
         temperature: f64,
@@ -258,8 +257,8 @@ impl<X: Genetic, S: Fitness + Clone> ResourceSoftStochastic<X, S> {
         let pressure = (self.pool.len() as f64 / self.target as f64).max(1e-3);
         let best_fit = self.best.as_ref().map(|(_, s)| s.fitness());
 
-        let drained: Vec<Member<X::Genome, S>> = std::mem::take(&mut self.pool);
-        let mut survivors: Vec<Member<X::Genome, S>> = Vec::with_capacity(drained.len());
+        let drained: Vec<Member<X::Genome>> = std::mem::take(&mut self.pool);
+        let mut survivors: Vec<Member<X::Genome>> = Vec::with_capacity(drained.len());
         let mut kept_best = false;
         for (m, r) in drained.into_iter().zip(realized) {
             // Keep exactly one copy of the global best unconditionally.
@@ -327,7 +326,6 @@ impl<X: Genetic, S: Fitness + Clone> EvolutionStrategy for ResourceSoftStochasti
         let crowding = Self::crowding_of(&self.genetics, &self.pool, self.sigma, &genome, None);
         self.pool.push(Member {
             genome,
-            score,
             fitness: fit,
             crowding,
         });
@@ -363,10 +361,9 @@ mod tests {
         }
     }
 
-    fn mk(x: f64) -> Member<f64, f64> {
+    fn mk(x: f64) -> Member<f64> {
         Member {
             genome: x,
-            score: x,
             fitness: x,
             crowding: 1.0,
         }
@@ -375,8 +372,8 @@ mod tests {
     #[test]
     fn sigma_scales_with_spread() {
         let g = UnitGenetics;
-        let tight: Vec<Member<f64, f64>> = [0.50, 0.51, 0.49, 0.50].into_iter().map(mk).collect();
-        let spread: Vec<Member<f64, f64>> = [0.0, 0.3, 0.6, 1.0].into_iter().map(mk).collect();
+        let tight: Vec<Member<f64>> = [0.50, 0.51, 0.49, 0.50].into_iter().map(mk).collect();
+        let spread: Vec<Member<f64>> = [0.0, 0.3, 0.6, 1.0].into_iter().map(mk).collect();
         let s_tight = ResourceSoftStochastic::<UnitGenetics, f64>::compute_sigma(&g, &tight, 0.15);
         let s_spread =
             ResourceSoftStochastic::<UnitGenetics, f64>::compute_sigma(&g, &spread, 0.15);
@@ -390,8 +387,7 @@ mod tests {
     fn crowding_penalizes_clusters() {
         let g = UnitGenetics;
         // Four genomes clustered around 0.5, one loner at 0.0.
-        let pool: Vec<Member<f64, f64>> =
-            [0.50, 0.50, 0.51, 0.49, 0.0].into_iter().map(mk).collect();
+        let pool: Vec<Member<f64>> = [0.50, 0.50, 0.51, 0.49, 0.0].into_iter().map(mk).collect();
         let sigma = 0.1;
         let crowded =
             ResourceSoftStochastic::<UnitGenetics, f64>::crowding_of(&g, &pool, sigma, &0.50, None);
@@ -406,11 +402,10 @@ mod tests {
     #[test]
     fn mate_locality_zero_matches_unbiased() {
         let g = UnitGenetics;
-        let pool: Vec<Member<f64, f64>> = [(0.1, 0.2), (0.9, 0.8), (0.5, 0.5)]
+        let pool: Vec<Member<f64>> = [(0.1, 0.2), (0.9, 0.8), (0.5, 0.5)]
             .into_iter()
             .map(|(x, f)| Member {
                 genome: x,
-                score: f,
                 fitness: f,
                 crowding: 1.0,
             })
