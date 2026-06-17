@@ -6,8 +6,8 @@ use crate::problems::Problem;
 use evors::genetic::Genetic;
 use evors::population::PopulationView;
 use evors::strategies::{
-    ClassicPopulation, ClassicPopulationInfo, SoftStochastic, SoftStochasticInfo,
-    SpeciatedSoftStochastic, SpeciatedSoftStochasticInfo,
+    ClassicPopulation, ClassicPopulationInfo, ResourceSoftStochastic, ResourceSoftStochasticInfo,
+    SoftStochastic, SoftStochasticInfo, SpeciatedSoftStochastic, SpeciatedSoftStochasticInfo,
 };
 use evors::strategy::EvolutionStrategy;
 use evors::{RecordingObserver, RunConfig, Stop, run_observed};
@@ -27,6 +27,7 @@ pub enum Strat {
     Classic(ClassicPopulationInfo),
     Ssea(SoftStochasticInfo),
     Speciated(SpeciatedSoftStochasticInfo),
+    Resource(ResourceSoftStochasticInfo),
     De(DeInfo),
 }
 
@@ -85,6 +86,15 @@ pub fn run_config(p: &Problem, cfg: &Config, budget: usize, seed: u64) -> RunRes
             let mut info = *info;
             info.seed = seed;
             let mut strat = SpeciatedSoftStochastic::new(
+                VecGenetics::new(p.bounds.clone(), cfg.mutation_step),
+                info,
+            );
+            run_one(p, &mut strat, budget)
+        }
+        Strat::Resource(info) => {
+            let mut info = *info;
+            info.seed = seed;
+            let mut strat = ResourceSoftStochastic::new(
                 VecGenetics::new(p.bounds.clone(), cfg.mutation_step),
                 info,
             );
@@ -235,6 +245,19 @@ pub fn default_configs() -> Vec<Config> {
                 mate_locality: loc,
                 archive_prob: 0.05,
                 speciation_pressure: 0.6,
+            }),
+            mutation_step: 0.3,
+        });
+    }
+    for &(target, rw, loc) in &[(300usize, 0.1f64, 3.0f64), (300, 0.2, 3.0)] {
+        v.push(Config {
+            label: format!("resource(target={target},rw={rw},loc={loc})"),
+            strat: Strat::Resource(ResourceSoftStochasticInfo {
+                target,
+                temperature: 0.2,
+                relative_width: rw,
+                mate_locality: loc,
+                seed: 0,
             }),
             mutation_step: 0.3,
         });
