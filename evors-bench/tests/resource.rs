@@ -6,6 +6,7 @@ use evors::{RunConfig, Stop, run};
 use evors_bench::VecGenetics;
 use evors_bench::two_circles::{between_fraction, bounds, covers_both, objective, occupancy};
 
+#[allow(clippy::ptr_arg)] // passed as a fn item over `&Vec<f64>` genomes
 fn fitness(x: &Vec<f64>) -> f64 {
     -objective(x)
 }

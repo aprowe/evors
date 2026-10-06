@@ -347,7 +347,7 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> SpeciatedSoftStochastic<X, S> {
         let mut kept_best = false;
         for m in drained.into_iter() {
             // Keep exactly one copy of the global best unconditionally.
-            if !kept_best && best_fit.map_or(false, |bf| (m.fitness - bf).abs() < f64::EPSILON) {
+            if !kept_best && best_fit.is_some_and(|bf| (m.fitness - bf).abs() < f64::EPSILON) {
                 kept_best = true;
                 survivors.push(m);
                 continue;
@@ -419,7 +419,7 @@ impl<X: Genetic, S: Fitness + Behavior + Clone> EvolutionStrategy
 
     fn report(&mut self, genome: X::Genome, score: S) {
         let fit = score.fitness();
-        if self.best.as_ref().map_or(true, |(_, s)| fit > s.fitness()) {
+        if self.best.as_ref().is_none_or(|(_, s)| fit > s.fitness()) {
             self.best = Some((genome.clone(), score.clone()));
         }
         // Compute the new member's novelty against the pool ∪ archive, O(pool+archive).

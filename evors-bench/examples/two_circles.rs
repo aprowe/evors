@@ -19,12 +19,14 @@ use std::io::{BufWriter, Write};
 const CHUNK: usize = 1_000;
 const CHUNKS: usize = 40; // 40k evaluations total
 
+#[allow(clippy::ptr_arg)] // passed as a fn item over `&Vec<f64>` genomes
 fn fitness(x: &Vec<f64>) -> f64 {
     -objective(x)
 }
 
 /// Drive `strat` for CHUNKS×CHUNK evals, recording per-chunk niche occupancy.
 /// Returns (final_pool, occupancy_rows) where each row is (trials, left, right, gap).
+#[allow(clippy::type_complexity)]
 fn run_chunked<St>(strat: &mut St) -> (Vec<Vec<f64>>, Vec<(usize, usize, usize, usize)>)
 where
     St: EvolutionStrategy<Score = f64> + PopulationView<Genome = Vec<f64>>,

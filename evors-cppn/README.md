@@ -12,7 +12,7 @@ Built in three sub-projects, all done:
   rendered **directly to the window with GL** and EMA-accumulated so it converges
   smoothly.
 
-GL plumbing is adapted from `~/projects/soap-in-a-tub` (OpenGL 4.3 core).
+GL plumbing is adapted from `soap-in-a-tub` (OpenGL 4.3 core).
 
 ```bash
 cargo run --release -p evors-cppn --bin cppn-gui   # the interactive app

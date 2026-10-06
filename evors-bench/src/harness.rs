@@ -70,14 +70,14 @@ pub fn run_config(p: &Problem, cfg: &Config, budget: usize, seed: u64) -> RunRes
     match &cfg.strat {
         Strat::Classic(info) => {
             let genetics = VecGenetics::new(p.bounds.clone(), cfg.mutation_step);
-            let mut info = info.clone();
+            let mut info = *info;
             info.seed = seed;
             let mut strat = ClassicPopulation::new(genetics, info);
             run_one(p, &mut strat, budget)
         }
         Strat::Ssea(info) => {
             let genetics = VecGenetics::new(p.bounds.clone(), cfg.mutation_step);
-            let mut info = info.clone();
+            let mut info = *info;
             info.seed = seed;
             let mut strat = SoftStochastic::new(genetics, info);
             run_one(p, &mut strat, budget)

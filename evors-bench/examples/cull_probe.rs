@@ -11,6 +11,7 @@ use evors_bench::two_circles::{bounds, objective};
 const N: usize = 40_000;
 const TARGET: usize = 300;
 
+#[allow(clippy::ptr_arg)] // passed as a fn item over `&Vec<f64>` genomes
 fn fitness(x: &Vec<f64>) -> f64 {
     -objective(x)
 }

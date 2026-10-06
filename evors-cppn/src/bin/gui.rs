@@ -1,5 +1,5 @@
 //! evors-cppn GUI (sub-project C). Manual egui_glow + glutin loop, mirroring
-//! `~/projects/soap-in-a-tub`: each frame the champion CPPN is rendered **to the
+//! `soap-in-a-tub`: each frame the champion CPPN is rendered **to the
 //! window framebuffer with GL** (the interpreter shader, EMA-accumulated for a
 //! smooth temporal average), then egui paints an opaque control panel on top.
 //! Evolution runs inline (one event loop / GL context per process).
@@ -521,17 +521,15 @@ impl App {
         if restart {
             self.restart();
         }
-        if pick_image {
-            if let Some(path) = rfd::FileDialog::new()
+        if pick_image
+            && let Some(path) = rfd::FileDialog::new()
                 .add_filter("images", &["png", "jpg", "jpeg", "bmp", "gif", "webp"])
                 .pick_file()
-            {
-                if let Some(target) = load_image_file(&path, RES) {
-                    self.target = target;
-                    self.target_tex = None; // rebuild thumbnail
-                    self.restart(); // evolve toward the new image
-                }
-            }
+            && let Some(target) = load_image_file(&path, RES)
+        {
+            self.target = target;
+            self.target_tex = None; // rebuild thumbnail
+            self.restart(); // evolve toward the new image
         }
 
         // 2. Evolve a batch.

@@ -103,6 +103,7 @@ impl EvolutionStrategy for Differential {
         let dim = self.bounds.len();
         let r = self.rng.random_range(0..dim); // forced-crossover dimension
         let mut trial = self.pop[i].x.clone();
+        #[allow(clippy::needless_range_loop)]
         for d in 0..dim {
             if d == r || self.rng.random_bool(self.cr) {
                 let v = self.pop[a].x[d] + self.f * (self.pop[b].x[d] - self.pop[c].x[d]);
@@ -115,7 +116,7 @@ impl EvolutionStrategy for Differential {
     }
 
     fn report(&mut self, genome: Vec<f64>, score: f64) {
-        if self.best.as_ref().map_or(true, |(_, b)| score > *b) {
+        if self.best.as_ref().is_none_or(|(_, b)| score > *b) {
             self.best = Some((genome.clone(), score));
         }
         match self.pending_target {

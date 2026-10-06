@@ -32,7 +32,7 @@ impl Genetic for StringGenetics {
     }
 }
 
-fn fitness(target: &[u8], g: &Vec<u8>) -> f64 {
+fn fitness(target: &[u8], g: &[u8]) -> f64 {
     g.iter().zip(target).filter(|(x, y)| x == y).count() as f64 / target.len() as f64
 }
 

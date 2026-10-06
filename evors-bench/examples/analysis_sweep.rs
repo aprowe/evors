@@ -23,7 +23,6 @@ use std::io::{BufWriter, Write};
 const SEEDS: u64 = 3;
 const COV_BUDGET: usize = 12_000;
 const TC_STEPS: usize = 30_000;
-const COV_PROBLEMS: [&str; 3] = ["ackley", "rastrigin", "griewank"];
 
 fn base() -> ResourceSoftStochasticInfo {
     ResourceSoftStochasticInfo {
@@ -172,11 +171,11 @@ fn main() {
     )
     .unwrap();
 
-    let mut row = |w: &mut BufWriter<File>,
-                   method: &str,
-                   knob: &str,
-                   value: f64,
-                   info: ResourceSoftStochasticInfo| {
+    let row = |w: &mut BufWriter<File>,
+               method: &str,
+               knob: &str,
+               value: f64,
+               info: ResourceSoftStochasticInfo| {
         let ca = cov_resource(info, "ackley");
         let cr = cov_resource(info, "rastrigin");
         let cg = cov_resource(info, "griewank");

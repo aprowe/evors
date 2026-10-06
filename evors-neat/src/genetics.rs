@@ -377,6 +377,24 @@ impl Genetic for NeatGenetics {
     }
 }
 
+/// Whether `target` is reachable from `start` over enabled connections.
+fn reachable(start: u64, target: u64, conns: &[ConnGene]) -> bool {
+    let mut stack = vec![start];
+    let mut seen = HashSet::new();
+    while let Some(node) = stack.pop() {
+        if node == target {
+            return true;
+        }
+        if !seen.insert(node) {
+            continue;
+        }
+        for c in conns.iter().filter(|c| c.enabled && c.from == node) {
+            stack.push(c.to);
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -474,22 +492,4 @@ mod tests {
         }
         assert!(!has_cycle(&child), "crossover produced a cycle");
     }
-}
-
-/// Whether `target` is reachable from `start` over enabled connections.
-fn reachable(start: u64, target: u64, conns: &[ConnGene]) -> bool {
-    let mut stack = vec![start];
-    let mut seen = HashSet::new();
-    while let Some(node) = stack.pop() {
-        if node == target {
-            return true;
-        }
-        if !seen.insert(node) {
-            continue;
-        }
-        for c in conns.iter().filter(|c| c.enabled && c.from == node) {
-            stack.push(c.to);
-        }
-    }
-    false
 }

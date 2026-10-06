@@ -1,9 +1,16 @@
 [package]
 name = "evors-neat"
-version = "0.1.0"
-edition = "2024"
+description = "NEAT (NeuroEvolution of Augmenting Topologies) as an evors Genetic."
+readme = "README.md"
+keywords = ["neat", "neuroevolution", "evolutionary", "neural-network"]
+categories = ["algorithms", "science"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
-evors = { path = ".." }
+evors = { path = "..", version = "0.1.0" }
 rand = "0.9"
 rand_chacha = "0.9"

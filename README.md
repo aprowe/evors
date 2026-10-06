@@ -69,6 +69,8 @@ let strat = SoftStochastic::new(PointGenetics, SoftStochasticInfo {
 
 ## Built-in strategies
 
+All four live in `evors::strategies`.
+
 - **`ClassicPopulation`** — an elitist, replace-worst steady-state GA with
   tournament selection. The optimization baseline.
 - **`SoftStochastic` (SSEA)** — the headline algorithm. Steady-state, **soft
@@ -78,6 +80,19 @@ let strat = SoftStochastic::new(PointGenetics, SoftStochasticInfo {
   `next` toward random exploration; a large pool (flourishing) biases toward
   exploitation. Novel-but-weak individuals can survive; so can strong-but-stale
   ones — which preserves diversity a greedy GA destroys.
+- **`SpeciatedSoftStochastic`** — SSEA plus **assortative mating** (crossover
+  prefers genetically nearby mates, `mate_locality`), optional *behavioral*
+  novelty for scores that implement `Behavior`, a novelty archive, and a
+  `speciation_pressure` knob that gates novelty by fitness. Encourages stable
+  species on separate optima.
+- **`ResourceSoftStochastic`** — the SSEA soft cull driven by **shared fitness**
+  (fitness divided by local crowding) instead of a novelty score, so the
+  population settles into a per-niche carrying capacity. Comes with tuned
+  presets — `ResourceSoftStochasticInfo::balanced()`, `even_spread()` and
+  `coverage()` — from the knob analysis in `charts/analysis/report.html`.
+
+Need a different algorithm? Implement `EvolutionStrategy` on your own type and
+pass it to `run` like any built-in.
 
 ## Quickstart
 
@@ -114,8 +129,20 @@ This repo is a Cargo workspace:
   generalize beyond fixed-shape genomes; solves XOR with a minimal single-hidden-node
   network (`charts/neat_xor.png`).
 - **[`evors-cppn`](evors-cppn/)** — evolve images with CPPN-NEAT, rendered and
-  scored on the GPU (egui + glow). Sub-project A (the headless GPU eval core) is
-  done; the evolution loop and egui app follow.
+  scored on the GPU (egui + glow), with an interactive app
+  (`cargo run --release -p evors-cppn --bin cppn-gui`).
+- **[`evors-bench`](evors-bench/)** — benchmark harness (not published) comparing
+  the strategies and a differential-evolution baseline on classic 2-D test
+  functions (Rastrigin, Ackley, Schwefel, …); figures in `charts/bench/`.
 
 `cargo test --workspace` runs everything. The `evors-cppn` GPU tests require a
 real OpenGL 4.3 context.
+
+## License
+
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
+[MIT license](LICENSE-MIT) at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in this work, as defined in the Apache-2.0 license, shall be dual
+licensed as above, without any additional terms or conditions.

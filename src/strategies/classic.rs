@@ -69,7 +69,7 @@ impl<X: Genetic> ClassicPopulation<X> {
         let mut best: Option<&(X::Genome, f64)> = None;
         for _ in 0..tournament {
             let cand = &current[rng.random_range(0..current.len())];
-            if best.map_or(true, |b| cand.1 > b.1) {
+            if best.is_none_or(|b| cand.1 > b.1) {
                 best = Some(cand);
             }
         }
@@ -102,7 +102,7 @@ impl<X: Genetic> EvolutionStrategy for ClassicPopulation<X> {
     }
 
     fn report(&mut self, genome: X::Genome, score: f64) {
-        if self.best.as_ref().map_or(true, |(_, s)| score > *s) {
+        if self.best.as_ref().is_none_or(|(_, s)| score > *s) {
             self.best = Some((genome.clone(), score));
         }
         self.current.push((genome, score));

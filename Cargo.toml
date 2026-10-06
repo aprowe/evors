@@ -2,6 +2,14 @@
 name = "evors"
 version = "0.1.0"
 edition = "2024"
+authors = ["Alexander Rowe"]
+description = "Trait-based evolutionary computation: pluggable genetics and ask/tell evolution strategies, including soft-culling, diversity-preserving algorithms."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/aprowe/evors"
+readme = "README.md"
+keywords = ["evolutionary", "genetic-algorithm", "optimization", "novelty-search", "neuroevolution"]
+categories = ["algorithms", "science", "simulation"]
+include = ["src/**/*", "examples/**/*", "tests/**/*", "README.md", "CHANGELOG.md", "LICENSE-*"]
 
 [dependencies]
 rand = "0.9"
@@ -14,3 +22,10 @@ parallel = ["dep:rayon"]
 
 [workspace]
 members = [".", "evors-neat", "evors-cppn", "evors-bench"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Alexander Rowe"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/aprowe/evors"

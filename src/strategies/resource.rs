@@ -465,7 +465,7 @@ impl<X: Genetic, S: Fitness + Clone> EvolutionStrategy for ResourceSoftStochasti
 
     fn report(&mut self, genome: X::Genome, score: S) {
         let fit = score.fitness();
-        if self.best.as_ref().map_or(true, |(_, s)| fit > s.fitness()) {
+        if self.best.as_ref().is_none_or(|(_, s)| fit > s.fitness()) {
             self.best = Some((genome.clone(), score.clone()));
         }
         let crowding = Self::crowding_of(&self.genetics, &self.pool, self.sigma, &genome, None);

@@ -1,5 +1,5 @@
 //! Hidden-window OpenGL 4.3 core context. Adapted from
-//! `~/projects/soap-in-a-tub/src/window.rs` (itself derived from eframe).
+//! `soap-in-a-tub/src/window.rs` (itself derived from eframe).
 
 use std::num::NonZeroU32;
 use winit::raw_window_handle::HasWindowHandle as _;

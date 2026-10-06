@@ -83,19 +83,19 @@ where
     let batch_size = cfg.batch_size.max(1);
 
     loop {
-        if let Some(cap) = cfg.max_trials {
-            if trials >= cap {
-                break;
-            }
+        if let Some(cap) = cfg.max_trials
+            && trials >= cap
+        {
+            break;
         }
         match &cfg.stop {
             Stop::Generations(g) if generations >= *g => break,
             Stop::Trials(t) if trials >= *t => break,
             Stop::Until(pred) => {
-                if let Some((_, s)) = strategy.best() {
-                    if pred(s) {
-                        break;
-                    }
+                if let Some((_, s)) = strategy.best()
+                    && pred(s)
+                {
+                    break;
                 }
             }
             _ => {}
@@ -196,7 +196,7 @@ mod tests {
             self.genetics.random(&mut self.rng)
         }
         fn report(&mut self, genome: f64, score: f64) {
-            if self.best.map_or(true, |(_, s)| score > s) {
+            if self.best.is_none_or(|(_, s)| score > s) {
                 self.best = Some((genome, score));
             }
         }
